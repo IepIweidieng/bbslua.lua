@@ -1,3 +1,6 @@
+In a nutshell, this is a Tetris-like game.
+總之這是一個類似俄羅斯方塊的遊戲。
+
 --#BBSLUA
 -- Interface: 0.119
 -- Title:     Tetraint　～ 不四方塊
@@ -1011,3 +1014,6 @@ end
 main(...);
 
 --#BBSLUA
+
+And that is it. The Tetraint.
+就這樣。這就是不四方塊。

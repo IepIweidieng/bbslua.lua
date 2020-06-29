@@ -1488,7 +1488,7 @@ For more information, please refer to https://term.ptt2.cc BBSLua
         end
         bbs.pause();
 
-        -- Load TOC (table of content/summary)
+        -- Prepare for loading TOC (table of content/summary)
         local toc = {};
         local toc_tags = {
             interface = true,
@@ -1502,22 +1502,40 @@ For more information, please refer to https://term.ptt2.cc BBSLua
         local bbslua_pat = [[^--#BBSLUA$]];
         local toctag_pat = [[^ *%-%-+ *([_A-Za-z][_0-9A-Za-z]*) *: *(.*) *$]];
         local is_code = false;
-        for line in io.lines(prog_path) do
-            if is_code then
-                local k, v = line:match(toctag_pat);
-                if not k or not v then
-                    break;
-                end
-                if toc_tags[k:lower()] then
-                    toc[k:lower()] = v;
-                end
-            elseif line:match(bbslua_pat) then
-                is_code = true;
-            end
-        end
+        local is_toc = true;
 
-        -- Load the program, with an isolated environment
-        local prog, err = loadfile(prog_path, "t", {
+        -- Load the program and TOC, with an isolated executation environment
+        local prog, err = load(coroutine.wrap(function()
+            -- Load the program line by line to handle plain text and TOC
+            for line in io.lines(prog_path) do
+                if line:match(bbslua_pat) then
+                    if is_code then
+                        -- End of code
+                        break;
+                    end
+                    -- Start of code
+                    is_code = true;
+                    coroutine.yield("\n");  -- Ignore this line
+                elseif is_code then
+                    local k, v = line:match(toctag_pat);
+                    if is_toc then
+                        if k and v then
+                            if toc_tags[k:lower()] then
+                                toc[k:lower()] = v;
+                            end
+                        else
+                            is_toc = false;
+                        end
+                    end
+                    coroutine.yield(line .. "\n");
+                else
+                    -- Plain text before code
+                    -- Replace with empty lines to keep the line count
+                    coroutine.yield("\n");
+                end
+            end
+        end),
+        prog_path, "t", {
             -- Lua standard library
             assert = assert,
             collectgarbage = collectgarbage,
@@ -1596,8 +1614,12 @@ For more information, please refer to https://term.ptt2.cc BBSLua
             load = nil,
             loadstring = nil,
         });
+        -- Handling loading errors
         if err ~= nil then
             report_error(err, [[BBS-Lua 載入失敗。]]);
+            return;
+        elseif not is_code then
+            bbs.pause([[BBS-Lua 載入失敗 (檔案不含 BBS-Lua 程式)。]]);
             return;
         end
 
