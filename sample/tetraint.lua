@@ -1,5 +1,5 @@
 --#BBSLUA
--- aInterface: 0.119
+-- Interface: 0.119
 -- Title:     Tetraint　～ 不四方塊
 -- Version:   0.00a
 -- Date:      2020-05-23
