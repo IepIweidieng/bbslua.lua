@@ -1691,5 +1691,3 @@ For more information, please refer to https://term.ptt2.cc BBSLua
 end
 
 _init(...);
-
---#BBSLUA
