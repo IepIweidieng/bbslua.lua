@@ -1,3 +1,6 @@
+# Program output
+luastore/
+
 # Compiled Lua sources
 luac.out
 
