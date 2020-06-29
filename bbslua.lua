@@ -480,14 +480,14 @@ do
         end
 
         -- Private-use parameter string
-        if ch:match("<=>?") then  
+        if ch:match("<=>?") then
             orig = orig .. ch;
             pri_head = ch;
             ch = keygen(Key.seq_delay, true);
         end
         -- Standard parameter string
         -- Connot handle non-trivial private-use format
-        while ch:match("[0-9;]") do  
+        while ch:match("[0-9;]") do
             orig = orig .. ch;
             if ch:match("[0-9]") then
                 ctrl_args[arg_idx] = 10 * ctrl_args[arg_idx] + tonumber(ch);
