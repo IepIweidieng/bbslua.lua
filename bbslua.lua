@@ -340,7 +340,7 @@ function class(def, is_local, lv)
         -- `def` is the class name
         return function(def_, is_local_)
             def_.classname = def;
-            -- Avoid tail call, otherwise `getfenv` on Vanilla Lua will broken
+            -- Avoid tail call, otherwise `getfenv` on vanilla Lua will broken
             return unpack{class(def_, is_local_ or is_local, 2)};
         end;
     end
@@ -416,7 +416,7 @@ do
         int tcgetattr(int fd, struct termios *termios_p);
         int tcsetattr(int fd, int optional_actions,
                       const struct termios *termios_p);
-        enum {NCCNS = 128};  // Should be large enouge
+        enum {NCCNS = 128};  // Should be large enough
         typedef uint8_t cc_t;
         typedef uint32_t tcflag_t;
         struct termios {
@@ -486,7 +486,7 @@ do
             ch = keygen(Key.seq_delay, true);
         end
         -- Standard parameter string
-        -- Connot handle non-trivial private-use format
+        -- Cannot handle non-trivial private-use format
         while ch:match("[0-9;]") do
             orig = orig .. ch;
             if ch:match("[0-9]") then
@@ -1293,7 +1293,7 @@ do
 
     -- Path
     local BBSHOME = ".";  -- Can be changed if needed
-    local store_cata = {GLOBAL = "global", USER = "user"};
+    local store_cate = {GLOBAL = "global", USER = "user"};
     local function get_global_path_tbl(hash)
         -- Why does the original BBS-Lua implementation use `U`?
         return {"luastore", "v1_U" .. bit.tohex(hash, 8)};
@@ -1302,11 +1302,11 @@ do
         -- Why does the original BBS-Lua implementation use `G`?
         return {"usr", userid:sub(1, 1), userid, ".luastore", "v1_G" .. bit.tohex(hash, 8)};
     end
-    local function store_path(cata, userid, hash)
+    local function store_path(cate, userid, hash)
         local path_tbl;
-        if cata == store_cata.GLOBAL then
+        if cate == store_cate.GLOBAL then
             path_tbl = get_global_path_tbl(hash);
-        elseif cata == store_cata.USER then
+        elseif cate == store_cate.USER then
             path_tbl = get_user_path_tbl(userid, hash);
         end
         if path_tbl == nil then
@@ -1355,13 +1355,13 @@ do
 
         -- The BBS-Lua store API table
         return {
-            load = function(cata)
+            load = function(cate)
                 if store_counter >= store_max then
                     return nil, "IO limit exceeded";
                 end
-                local path = store_path(cata, bbs.userid, store_hash);
+                local path = store_path(cate, bbs.userid, store_hash);
                 if path == nil then
-                    return nil, "invalid store catagory";
+                    return nil, "invalid store category";
                 end
                 local file = io.open(path, "r");
                 if file == nil then
@@ -1372,13 +1372,13 @@ do
                 file:close();
                 return res;
             end,
-            save = function(cata, str)
+            save = function(cate, str)
                 if store_counter >= store_max then
                     return false, "IO limit exceeded";
                 end
-                local path = store_path(cata, bbs.userid, store_hash);
+                local path = store_path(cate, bbs.userid, store_hash);
                 if path == nil then
-                    return false, "invalid store catagory";
+                    return false, "invalid store category";
                 end
                 local file = io.open(path, "w");
                 if file == nil then
@@ -1389,18 +1389,18 @@ do
                 file:close();
                 return true;
             end,
-            limit = function(cata)
-                if cata == store.USER then
+            limit = function(cate)
+                if cate == store.USER then
                     return 16 * 1024;
                 end
-                if cata == store.GLOBAL then
+                if cate == store.GLOBAL then
                     return 16 * 1024;
                 end
                 return 0;
             end,
             iolimit = function() return store_max; end,
-            USER = store_cata.USER,
-            GLOBAL = store_cata.GLOBAL,
+            USER = store_cate.USER,
+            GLOBAL = store_cate.GLOBAL,
         };
     end
 end
@@ -1662,7 +1662,7 @@ For more information, please refer to https://term.ptt2.cc BBSLua
 
         bbs.attrset(0, 37, 44);
         y = stacked_print(y,
-            [[ ■ BBS-Lua on Lua]], "  ", "Version: ", "v1.00", "  ", "API Level: ", bbs.interface, "\n    ", "Launced at: ", bbs.ctime());
+            [[ ■ BBS-Lua on Lua]], "  ", "Version: ", "v1.00", "  ", "API Level: ", bbs.interface, "\n    ", "Launched at: ", bbs.ctime());
         local msg = [[提醒您執行中隨時可按]] .. bbs.ANSI_COLOR(31) .. " [Ctrl-C] " .. bbs.ANSI_COLOR(34) .. [[強制中斷 BBS-Lua 程式]];
         bbs.pause(msg);
         bbs.clear();

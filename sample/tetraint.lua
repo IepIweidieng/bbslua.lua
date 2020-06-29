@@ -348,7 +348,7 @@ function class(def, is_local, lv)
         -- `def` is the class name
         return function(def_, is_local_)
             def_.classname = def;
-            -- Avoid tail call, otherwise `getfenv` on Vanilla Lua will broken
+            -- Avoid tail call, otherwise `getfenv` on vanilla Lua will broken
             return unpack{class(def_, is_local_ or is_local, 2)};
         end;
     end
@@ -416,7 +416,7 @@ function Color:decode()
     };
 end
 
--- Tetronimo cell
+-- Tetromino cell
 local_class "Cell"{};
 Cell.State = {
     EMPTY = 1,
@@ -450,7 +450,7 @@ Cell.C = Cell{fg = 6};  -- Cyan
 Cell.W = Cell{fg = 7};  -- White
 Cell.V = Cell{Cell.State.EMPTY};  -- Void
 
--- Tetronimo piece
+-- Tetromino piece
 local_class "Tetro"{};
 function Tetro:new(...)
     local args = getargs({{"copy", "Tetro"}, "piece", "kick"}, ...);
@@ -466,7 +466,7 @@ do
     -- rot180 - Rotated 180 degree from initial
     -- rotc90 - Rotated 90 degree counter-clockwise from initial
 
-    -- Cell shorthands
+    -- Cell shorthand
     local R, G, Y, B, P, C, W, _ = Cell.R, Cell.G, Cell.Y, Cell.B, Cell.M, Cell.C, Cell.W, Cell.V;
     -- Wall kick data for rotation (clockwise): {
     --     normal,
@@ -684,7 +684,7 @@ local double_border_pat = {
     {[[╗]], [[╝]]},  -- top-right, bottom-right
 };
 
--- Tetronimo board (cell size is 2x1)
+-- Tetromino board (cell size is 2x1)
 -- 0-indexed to prevent confusions
 --[[
 y
@@ -743,7 +743,7 @@ function Board:draw()
     draw:top();
 end
 
--- Tetronimo piece (cell size is 2x1)
+-- Tetromino piece (cell size is 2x1)
 -- 1-indexed
 --[[
  y
