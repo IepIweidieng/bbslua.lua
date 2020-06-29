@@ -1408,7 +1408,7 @@ end
 -- Make BitOp compatible with deprecated bitlib used by older BBS-Lua versions
 bit.cast = bit.cast or bit.tobit;
 
-local __RUNTIME = jit.version or _VERSION;
+local __RUNTIME = jit and jit.version or _VERSION;
 
 local function _fini()
     if _fini_cb ~= nil then
