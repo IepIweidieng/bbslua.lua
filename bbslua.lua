@@ -1442,9 +1442,7 @@ Copyright (c) 2020 Iweidieng Iep <iid@ccns.ncku.edu.tw>
 BBS-Lua is a project run by Hung-Te Lin <piaip@csie.org>
 For more information, please refer to https://term.ptt2.cc BBSLua
 ]];
-        local conf_str = store.load(store.GLOBAL);
-        bbs.print("store.load(store.GLOBAL): ", objstr(conf_str));
-        local conf = obj_from_str(conf_str or "{}");
+        local conf = obj_from_str(store.load(store.GLOBAL) or "{}");
         local ymax, xmax = bbs.getmaxyx();
 
         bbs.print("Configurations: ");
@@ -1457,22 +1455,6 @@ For more information, please refer to https://term.ptt2.cc BBSLua
         conf.userid = bbs.getdata(13, bbs.DOECHO, conf.userid);
         bbs.userid = conf.userid;
 
-        bbs.addstr("password: ");
-        local pass = bbs.getdata(13, bbs.NOECHO);
-        bbs.moverel(-1);
-        bbs.print("password: ", pass);
-
-        bbs.addstr("number: ");
-        bbs.getdata(13, bbs.NUMECHO, "42");
-
-        bbs.addstr("Question? [Y/n] ");
-        bbs.getdata(3, bbs.LCECHO);
-
-        bbs.addstr("password (12-digit): ");
-        local pass = bbs.getdata(13, bbs.PASSECHO, "42");
-        bbs.moverel(-1);
-        bbs.print("password: ", pass);
-
         bbs.addstr("usernick: ");
         conf.usernick = conf.usernick or bbs.usernick;
         conf.usernick = bbs.getdata(25, bbs.DOECHO, conf.usernick);
@@ -1482,11 +1464,11 @@ For more information, please refer to https://term.ptt2.cc BBSLua
         conf.sitename = conf.sitename or bbs.sitename;
         conf.sitename = bbs.getdata(25, bbs.DOECHO, conf.sitename);
         bbs.sitename = conf.sitename;
+        bbs.print();
 
-        local conf_str = objstr(conf, false);
-        local save_res, e = store.save(store.GLOBAL, conf_str);
+        local save_res, e = store.save(store.GLOBAL, objstr(conf, false));
         if save_res then
-            bbs.print("Configuration saved: ", objstr(conf_str));
+            bbs.print("Configuration saved.");
         else
             bbs.print("Failed to save configuration: ", e);
         end
@@ -1494,7 +1476,7 @@ For more information, please refer to https://term.ptt2.cc BBSLua
         -- Prepare for loading the program
         local prog_path = arg[1];
         if prog_path == nil or prog_path == "" then
-            bbs.print("Usage: `" .. arg[0] .. " <program-path>`");
+            bbs.print("\nUsage: `" .. arg[0] .. " <program-path>`");
             bbs.addstr("Enter path to BBS-Lua program: ");
             prog_path = bbs.getdata(48, bbs.DOECHO, conf.last_prog_path);
         end
@@ -1622,8 +1604,7 @@ For more information, please refer to https://term.ptt2.cc BBSLua
         -- `prog_path` is valid; save it in the configuration
         conf.last_prog_path = prog_path;
         -- Configuration changed; save again (ignore errors)
-        local conf_str = objstr(conf, false);
-        store.save(store.GLOBAL, conf_str);
+        store.save(store.GLOBAL, objstr(conf, false));
 
         local function stacked_print(y, ...)
             local str = table.concat{...};
