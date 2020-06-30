@@ -1408,7 +1408,36 @@ end
 -- Make BitOp compatible with deprecated bitlib used by older BBS-Lua versions
 bit.cast = bit.cast or bit.tobit;
 
+-- BBS-Lua on Lua Extensions
+-- Runtime version
 local __RUNTIME = jit and jit.version or _VERSION;
+-- A getter-only debug library for convenience
+local debug_bbslua = {
+    getfenv = debug.getfenv,
+    gethook = debug.gethook,
+    getinfo = debug.getinfo,
+    getlocal = debug.getlocal,
+    getmetatable = debug.getmetatable,
+    getregistry = debug.getregistry,
+    getupvalue = debug.getupvalue,
+    traceback = debug.traceback,
+};
+-- An empty package library so that users can define their own modules
+local module_bbslua = module;
+local require_bbslua = require;
+local package_bbslua = {
+    loaded = {
+        package = package_bbslua,
+        string = string,
+        table = table,
+        math = math,
+        debug = debug_bbslua,
+        bit = bit,
+    },
+    loaders = {function(mod) return preload[mod]; end},
+    preload = {},
+    seeall = package.seeall,
+};
 
 local function _fini()
     if _fini_cb ~= nil then
@@ -1503,6 +1532,63 @@ For more information, please refer to https://term.ptt2.cc BBSLua
         local toctag_pat = [[^ *%-%-+ *([_A-Za-z][_0-9A-Za-z]*) *: *(.*) *$]];
         local is_code = false;
         local is_toc = true;
+        local proc_global = {
+            -- Lua standard library
+            assert = assert,
+            collectgarbage = collectgarbage,
+            error = error,
+            getfenv = getfenv,
+            getmetatable = getmetatable,
+            ipairs = ipairs,
+            next = next,
+            pairs = pairs,
+            pcall = pcall,
+            rawequal = rawequal,
+            rawget = rawget,
+            rawlen = rawlen,
+            rawset = rawset,
+            select = select,
+            setfenv = setfenv,
+            setmetatable = setmetatable,
+            tonumber = tonumber,
+            tostring = tostring,
+            type = type,
+            unpack = unpack,
+            _VERSION = _VERSION,
+            xpcall = xpcall,
+
+            coroutine = coroutine,
+            string = string,
+            table = table,
+            math = math,
+            bit = bit,
+
+            -- BBS-Lua Exclusive API
+            print = bbs.print,
+            bbs = bbs,
+            toc = toc,
+            store = store_new(prog_path),
+
+            -- BBS-Lua on Lua Extensions
+            __RUNTIME = __RUNTIME,
+            module = module_bbslua,
+            require = require_bbslua,
+            package = package_bbslua,
+            debug = debug_bbslua,
+
+            -- Global Lua libraries not in BBS-Lua
+            io = nil,
+            os = nil,
+            jit = nil,
+            ffi = nil,
+
+            -- Global Lua API functions not in BBS-Lua
+            dofile = nil,
+            loadfile = nil,
+            load = nil,
+            loadstring = nil,
+        };
+        proc_global._G = proc_global;
 
         -- Load the program and TOC, with an isolated executation environment
         local prog, err = load(coroutine.wrap(function()
@@ -1535,85 +1621,7 @@ For more information, please refer to https://term.ptt2.cc BBSLua
                 end
             end
         end),
-        prog_path, "t", {
-            -- Lua standard library
-            assert = assert,
-            collectgarbage = collectgarbage,
-            error = error,
-            getfenv = getfenv,
-            getmetatable = getmetatable,
-            ipairs = ipairs,
-            next = next,
-            pairs = pairs,
-            pcall = pcall,
-            print = print,
-            rawequal = rawequal,
-            rawget = rawget,
-            rawlen = rawlen,
-            rawset = rawset,
-            select = select,
-            setfenv = setfenv,
-            setmetatable = setmetatable,
-            tonumber = tonumber,
-            tostring = tostring,
-            type = type,
-            unpack = unpack,
-            _VERSION = _VERSION,
-            xpcall = xpcall,
-
-            coroutine = coroutine,
-            string = string,
-            table = table,
-            math = math,
-            bit = bit,
-
-            -- BBS-Lua Exclusive API
-            bbs = bbs,
-            toc = toc,
-            store = store_new(prog_path),
-
-            -- BBS-Lua on Lua Extensions
-            -- Runtime version
-            __RUNTIME = __RUNTIME,
-            -- An empty package library so that users can define their own modules
-            module = module,
-            require = require,
-            package = {
-                loaded = {
-                    package = package,
-                    string = string,
-                    table = table,
-                    math = math,
-                    debug = debug,
-                },
-                loaders = {function(mod) return preload[mod]; end},
-                preload = {},
-                seeall = package.seeall,
-            },
-            -- A getter-only debug library for convenience
-            debug = {
-                getfenv = debug.getfenv,
-                gethook = debug.gethook,
-                getinfo = debug.getinfo,
-                getlocal = debug.getlocal,
-                getmetatable = debug.getmetatable,
-                getregistry = debug.getregistry,
-                getupvalue = debug.getupvalue,
-                traceback = debug.traceback,
-            },
-
-            -- Global Lua libraries not in BBS-Lua
-            io = nil,
-            os = nil,
-            jit = nil,
-            ffi = nil,
-
-            -- Global Lua API functions not in BBS-Lua
-            dofile = nil,
-            loadfile = nil,
-            load = nil,
-            loadstring = nil,
-        });
+        prog_path, "t", proc_global);
         -- Handling loading errors
         if err ~= nil then
             report_error(err, [[BBS-Lua 載入失敗。]]);
