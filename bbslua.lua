@@ -1146,7 +1146,7 @@ do
     end
     local function getdata(w, echo, str)
         w = math.max(w - 1, 0);  -- `- 1` for C-string ending `'\0'`
-        echo = echo ~= Echo.NOECHO and echo or Echo.HIDEECHO;
+        echo = echo ~= Echo.NOECHO and (echo or 0) or Echo.HIDEECHO;
         local y, x = getyx();
         local data, cur = preprocess_data("", str or "", 0, w, echo, history);
         history[1][history.idx] = data;
