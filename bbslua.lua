@@ -1532,7 +1532,7 @@ For more information, please refer to https://term.ptt2.cc BBSLua
         local toctag_pat = [[^ *%-%-+ *([_A-Za-z][_0-9A-Za-z]*) *: *(.*) *$]];
         local is_code = false;
         local is_toc = true;
-        local proc_global = {
+        local prog_global = {
             -- Lua standard library
             assert = assert,
             collectgarbage = collectgarbage,
@@ -1588,7 +1588,7 @@ For more information, please refer to https://term.ptt2.cc BBSLua
             load = nil,
             loadstring = nil,
         };
-        proc_global._G = proc_global;
+        prog_global._G = prog_global;
 
         -- Load the program and TOC, with an isolated executation environment
         local prog, err = load(coroutine.wrap(function()
@@ -1621,7 +1621,7 @@ For more information, please refer to https://term.ptt2.cc BBSLua
                 end
             end
         end),
-        prog_path, "t", proc_global);
+        prog_path, "t", prog_global);
         -- Handling loading errors
         if err ~= nil then
             report_error(err, [[BBS-Lua 載入失敗。]]);
