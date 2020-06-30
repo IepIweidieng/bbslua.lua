@@ -9,6 +9,97 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ]]
 
+-- Outer sandboxing
+
+-- Unbind `io` library
+local io_write = io.write;
+local io_flush = io.flush;
+local io_close = io.close;
+local io_open = io.open;
+local io_lines = io.lines;
+io = nil;
+
+-- Unbind `os` library
+local os_time = os.time;
+local os_date = os.date;
+os = nil;
+
+-- BBS-Lua on Lua Extensions
+-- Runtime version
+local __RUNTIME = jit and jit.version or _VERSION;
+jit = nil;
+-- A getter-only debug library for convenience
+local debug_bbslua = {
+    getfenv = debug.getfenv,
+    gethook = debug.gethook,
+    getinfo = debug.getinfo,
+    getlocal = debug.getlocal,
+    getmetatable = debug.getmetatable,
+    -- getregistry = debug.getregistry,  -- Useless in pure Lua and danger
+    -- getupvalue = debug.getupvalue,  -- Too powerful and danger
+    traceback = debug.traceback,
+};
+debug = debug_bbslua;
+-- An empty package library so that users can define their own modules
+local package_bbslua = {
+    loaded = {
+        package = package_bbslua,
+        string = string,
+        table = table,
+        math = math,
+        debug = debug_bbslua,
+        bit = bit,
+    },
+    loaders = {function(mod) return preload[mod]; end},
+    preload = {},
+    seeall = package.seeall,
+};
+package = package_bbslua;
+
+-- Unbind eval functions
+local basic_load = load;
+dofile = nil;
+loadfile = nil;
+load = nil;
+loadstring = nil;
+
+-- Free memory for unbound API
+collectgarbage();
+
+-- Cache library functions to immune to library modification by custom program
+local coroutine_wrap = coroutine.wrap;
+local coroutine_yield = coroutine.yield;
+local coroutine_create = coroutine.create;
+local coroutine_resume = coroutine.resume;
+
+local string_match = string.match;
+local string_sub = string.sub;
+local string_byte = string.byte;
+local string_char = string.char;
+local string_gmatch = string.gmatch;
+local string_gsub = string.gsub;
+
+local table_concat = table.concat;
+local table_remove = table.remove;
+local table_insert = table.insert;
+
+local math_abs = math.abs;
+local math_max = math.max;
+local math_fmod = math.fmod;
+local math_modf = math.modf;
+local math_min = math.min;
+local math_random = math.random;
+local math_randomseed = math.randomseed;
+
+-- Make BitOp compatible with deprecated bitlib used by older BBS-Lua versions
+local bit = require "bit";
+bit.cast = bit.cast or bit.tobit;
+
+local bnot = bit.bnot;
+local band, bor, bxor = bit.band, bit.bor, bit.bxor;
+local lshift, rshift, arshift = bit.lshift, bit.rshift, bit.arshift;
+local bit_tohex = bit.tohex;
+
 -- Utility
 
 local function noop(...)
@@ -23,7 +114,7 @@ local Weak_set;
 local function idxstr(idx, lookup)
     lookup = lookup == nil and Weak_set{} or lookup;
     if type(idx) == "string" then
-        if idx:match("^[%a_][%w_]*$") then
+        if string_match(idx, "^[%a_][%w_]*$") then
             return idx;
         end
     end
@@ -43,7 +134,7 @@ local function tblstr(tbl, lookup)
             res[#res + 1] = idxstr(k, lookup) .. " = " .. vstr;
         end
     end
-    return "{" .. table.concat(res, ", ")  .. "}";
+    return "{" .. table_concat(res, ", ")  .. "}";
 end
 
 function objstr(obj, lookup)
@@ -76,14 +167,14 @@ local obj_from_str;
 
 local function idx_from_str(str, i)
     i = i or 1;
-    local idx, eq = str:sub(i):match("^([%a_][%w_]*)( *= *)");
+    local idx, eq = string_match(string_sub(str, i), "^([%a_][%w_]*)( *= *)");
     if idx == nil then
-        local lbracket = str:sub(i):match("^%[");
+        local lbracket = string_match(string_sub(str, i), "^%[");
         if lbracket == nil then
             return nil, i;
         end
         local res, i = obj_from_str(str, i + #lbracket);
-        local rbracket = str:sub(i):match("^%]");
+        local rbracket = string_match(string_sub(str, i), "^%]");
         return res, i + #rbracket;
     end
     return idx, i + #idx + #eq;
@@ -93,9 +184,9 @@ local function tbl_from_str(str, i)
     i = i or 1;
     local res = {};
     local idx = 1;
-    local open = str:sub(i):match("^ *{ *");
+    local open = string_match(string_sub(str, i), "^ *{ *");
     i = i + #open;
-    local close = str:sub(i):match("^ *} *");
+    local close = string_match(string_sub(str, i), "^ *} *");
     while not close do
         local key, val;
         key, i = idx_from_str(str, i);
@@ -105,9 +196,9 @@ local function tbl_from_str(str, i)
         end
         val, i = obj_from_str(str, i);
         res[key] = val;
-        local comma = str:sub(i):match("^ *, *") or "";
+        local comma = string_match(string_sub(str, i), "^ *, *") or "";
         i = i + #comma;
-        close = str:sub(i):match("^ *} *");
+        close = string_match(string_sub(str, i), "^ *} *");
     end
     return res, i + #close;
 end
@@ -120,44 +211,44 @@ local str_esc_tbl = {
 local function str_from_str(str, i)
     i = i or 1;
     local res = {};
-    local open = str:sub(i):match([[^ *"]]);
+    local open = string_match(string_sub(str, i), [[^ *"]]);
     i = i + #open;
-    local close = str:sub(i):match([[^"]]);
+    local close = string_match(string_sub(str, i), [[^"]]);
     while not close do
-        local esc = str:sub(i):match("^\\([abfnrtv\\\"\'\n])");
+        local esc = string_match(string_sub(str, i), "^\\([abfnrtv\\\"\'\n])");
         if esc ~= nil then
             res[#res + 1] = str_esc_tbl(esc);
             i = i + #esc;
         else
-            esc = str:sub(i):match([[^\([0-9][0-9]?[0-9]?)]]);
+            esc = string_match(string_sub(str, i), [[^\([0-9][0-9]?[0-9]?)]]);
             if esc ~= nil then
-                res[#res + 1] = string.char(tonumber(esc));
+                res[#res + 1] = string_char(tonumber(esc));
                 i = i + #esc;
             else
-                esc = str:sub(i):match([[^\x([0-9][0-9])]]);
+                esc = string_match(string_sub(str, i), [[^\x([0-9][0-9])]]);
                 if esc ~= nil then
-                    res[#res + 1] = string.char(tonumber(esc, 16));
+                    res[#res + 1] = string_char(tonumber(esc, 16));
                     i = i + #esc;
                 else
-                    res[#res + 1] = str:sub(i, i);
+                    res[#res + 1] = string_sub(str, i, i);
                     i = i + 1;
                 end
             end
         end
-        close = str:sub(i):match([[^"]]);
+        close = string_match(string_sub(str, i), [[^"]]);
     end
-    return table.concat(res), i + #close;
+    return table_concat(res), i + #close;
 end
 
 local classes = {};  -- Need the class loaders
 local word_obj_tbl = {
-    nan = math.abs(0 / 0), ["-nan"] = -math.abs(0 / 0),
+    nan = math_abs(0 / 0), ["-nan"] = -math_abs(0 / 0),
     inf = 1 / 0, ["-inf"] = (-1 / 0),
     ["true"] = true, ["false"] = false,
 };
 function obj_from_str(str, i)
     i = i or 1;
-    local sp, classname = str:sub(i):match([[^( *)([%a_][%w_]*) *{]]);
+    local sp, classname = string_match(string_sub(str, i), [[^( *)([%a_][%w_]*) *{]]);
     if classname ~= nil then
         i = i + #sp + #classname;
         local classobj, objdef;
@@ -165,7 +256,7 @@ function obj_from_str(str, i)
             local classdef;
             classdef, i = tbl_from_str(str, i);
             classobj = class(classdef);
-            if not str:sub(i):match("^ *{") then
+            if not string_match(string_sub(str, i), "^ *{") then
                 -- Return the anonymous class itself
                 return classdef, i;
             end
@@ -175,10 +266,10 @@ function obj_from_str(str, i)
         objdef, i = tbl_from_str(str, i);
         return classobj(objdef), i;
     end
-    if str:sub(i):match([[^ *"]]) then
+    if string_match(string_sub(str, i), [[^ *"]]) then
         return str_from_str(str, i);
     end
-    if str:sub(i):match("^ *{") then
+    if string_match(string_sub(str, i), "^ *{") then
         return tbl_from_str(str, i);
     end
     for k, v in ipairs{
@@ -186,12 +277,12 @@ function obj_from_str(str, i)
             [[^( *)(%-?[0-9]*%.[0-9]+[Ee]%-?[0-9]+)]],
             [[^( *)(%-?[0-9]+%.[0-9]*)]],
             [[^( *)(%-?%.?[0-9]+)]]} do
-        local sp, num = str:sub(i):match(v);
+        local sp, num = string_match(string_sub(str, i), v);
         if num ~= nil then
             return tonumber(num), i + #sp + #num;
         end
     end
-    local sp, word = str:sub(i):match([[^( *)(%-?[%a_][%w_]*)]]);
+    local sp, word = string_match(string_sub(str, i), [[^( *)(%-?[%a_][%w_]*)]]);
     if word ~= nil then
         i = i + #sp + #word;
         local obj = word_obj_tbl[word];
@@ -216,12 +307,12 @@ local function ipairs(obj, i, j)
     end, obj, (it and (not j or it <= j)) and it or nil;
 end
 
-local function each_ch(str) return str:gmatch("."); end
-local function each_ch_utf8(str) return str:gmatch(".[\128-\191]*"); end
+local function each_ch(str) return string_gmatch(str, "."); end
+local function each_ch_utf8(str) return string_gmatch(str, ".[\128-\191]*"); end
 
 local function unpack_str(str, i, j)
     local res = {};
-    for ch in each_ch(str:sub(i or 1, j)) do
+    for ch in each_ch(string_sub(str, i or 1, j)) do
         res[#res + 1] = ch;
     end
     return unpack(res);
@@ -315,7 +406,7 @@ end
 
 local function zip(tb1, tb2)
     local res = {};
-    for k = 1, math.max(#tb1, #tb2), 1 do
+    for k = 1, math_max(#tb1, #tb2), 1 do
         res[k] = {tb1[k], tb2[k]};
     end
     return res;
@@ -389,72 +480,112 @@ end
 -- A full, stand-alone BBS-Lua implementation for shell (requires LuaJIT)
 local bbs;
 local store_new;
-local bit = bit;
 local _fini_cb = {};
 do
-    local io = io;
-    local os = os;
-    bit = require "bit";
-    local ffi = require "ffi";
-    ffi.cdef[[
-        typedef void fd_set;  /* Not defined */
-        int select(int nfds, fd_set *readfds, fd_set *writefds,
-                   fd_set *exceptfds, struct timeval *timeout);
-        struct timeval {
-            long    tv_sec;         /* seconds */
-            long    tv_usec;        /* microseconds */
-        };
-        ssize_t read(int fd, void *buf, size_t len);
+    local term_setup;
+    local wait_input;
+    local readall_or_block;
+    local getwinsize;
+    local mkdir;
+    local getclocktp;
+    local getpwd;
+    do
+        local ffi = require "ffi";
+        ffi.cdef[[
+            typedef void fd_set;  /* Not defined */
+            int select(int nfds, fd_set *readfds, fd_set *writefds,
+                       fd_set *exceptfds, struct timeval *timeout);
+            struct timeval {
+                long    tv_sec;         /* seconds */
+                long    tv_usec;        /* microseconds */
+            };
+            ssize_t read(int fd, void *buf, size_t len);
 
-        int ioctl(int fd, int cmd, ...);
-        struct winsize {
-            uint16_t ws_row;
-            uint16_t ws_col;
-            uint16_t ws_xpixel;   /* unused */
-            uint16_t ws_ypixel;   /* unused */
-        };
-        int tcgetattr(int fd, struct termios *termios_p);
-        int tcsetattr(int fd, int optional_actions,
-                      const struct termios *termios_p);
-        enum {NCCNS = 128};  // Should be large enough
-        typedef uint8_t cc_t;
-        typedef uint32_t tcflag_t;
-        struct termios {
-            tcflag_t c_iflag;      /* input modes */
-            tcflag_t c_oflag;      /* output modes */
-            tcflag_t c_cflag;      /* control modes */
-            tcflag_t c_lflag;      /* local modes */
-            cc_t     c_cc[NCCNS];  /* special characters */
-        };
+            int ioctl(int fd, int cmd, ...);
+            struct winsize {
+                uint16_t ws_row;
+                uint16_t ws_col;
+                uint16_t ws_xpixel;   /* unused */
+                uint16_t ws_ypixel;   /* unused */
+            };
+            int tcgetattr(int fd, struct termios *termios_p);
+            int tcsetattr(int fd, int optional_actions,
+                          const struct termios *termios_p);
+            enum {NCCNS = 128};  // Should be large enough
+            typedef uint8_t cc_t;
+            typedef uint32_t tcflag_t;
+            struct termios {
+                tcflag_t c_iflag;      /* input modes */
+                tcflag_t c_oflag;      /* output modes */
+                tcflag_t c_cflag;      /* control modes */
+                tcflag_t c_lflag;      /* local modes */
+                cc_t     c_cc[NCCNS];  /* special characters */
+            };
 
-        int clock_gettime(int /* clockid_t */ clk_id, struct timespec *tp);
-        struct timespec {
-            long    tv_sec;         /* seconds */
-            long    tv_nsec;        /* nanoseconds */
-        };
+            int clock_gettime(int /* clockid_t */ clk_id, struct timespec *tp);
+            struct timespec {
+                long    tv_sec;         /* seconds */
+                long    tv_nsec;        /* nanoseconds */
+            };
 
-        typedef uint32_t mode_t;
-        int mkdir(const char *pathname, mode_t mode);
-        char *getcwd(char *buf, size_t size);
-    ]];
-    -- Hardcoded constants; may need to change when on a different platform
-    local termio = {TIOCGWINSZ = 0x5413, ICANON = 0x2, ECHO = 0x8, TCSANOW = 0};
-    local clock = {CLOCK_REALTIME = 0};
+            typedef uint32_t mode_t;
+            int mkdir(const char *pathname, mode_t mode);
+            char *getcwd(char *buf, size_t size);
+        ]];
+        -- Hardcoded constants; may need to change when on a different platform
+        local termio = {TIOCGWINSZ = 0x5413, ICANON = 0x2, ECHO = 0x8, TCSANOW = 0};
+        local clock = {CLOCK_REALTIME = 0};
 
-    -- Terminal handling
-    local pattr = ffi.new "struct termios[1]";
-    ffi.C.tcgetattr(1, pattr);
+        -- Terminal handling
+        local pattr = ffi.new "struct termios[1]";
+        ffi.C.tcgetattr(1, pattr);
 
-    local pattr_orig = ffi.new("struct termios[1]", {pattr[0]});
-    pattr[0].c_lflag = bit.band(pattr[0].c_lflag, bit.bnot(bit.bor(termio.ICANON, termio.ECHO)));
+        local pattr_orig = ffi.new("struct termios[1]", {pattr[0]});
+        pattr[0].c_lflag = band(pattr[0].c_lflag, bnot(bor(termio.ICANON, termio.ECHO)));
 
-    local function term_setup()
-        ffi.C.tcsetattr(1, termio.TCSANOW, pattr);
+        function term_setup()
+            ffi.C.tcsetattr(1, termio.TCSANOW, pattr);
+        end
+        _fini_cb[#_fini_cb + 1] = function()
+            ffi.C.tcsetattr(1, termio.TCSANOW, pattr_orig);
+        end;
+        term_setup();
+
+        function wait_input(sec, fd)
+            fd = fd or 0;
+            local pfd = fd >= 0
+                and ffi.new("uint8_t[?]", rshift(fd, 3) + 1, {[rshift(fd, 3)] = lshift(1, band(fd, 0x7))})
+                or nil;
+            local ptv = sec >= 0
+                and ffi.new("struct timeval[1]", {{math_modf(sec), 1e6 * math_fmod(sec, 1)}})
+                or nil;
+            local res = ffi.C.select(fd + 1, pfd, nil, nil, ptv);
+            return res > 0;
+        end
+        function readall_or_block(fd)
+            local buf = ffi.new "int8_t[32]";
+            local len = ffi.C.read(fd or 0, buf, 32);
+            return ffi.string(buf, len);
+        end
+        function getwinsize()
+            local psize = ffi.new "struct winsize[1]";
+            ffi.C.ioctl(0, termio.TIOCGWINSZ, psize);
+            return psize[0];
+        end
+        function mkdir(path, perm)
+            ffi.C.mkdir(path, tonumber(perm, 8));
+        end
+        function getclocktp()
+            local ptp = ffi.new "struct timespec[1]";
+            ffi.C.clock_gettime(clock.CLOCK_REALTIME, ptp);
+            return ptp[0];
+        end
+        function getpwd()
+            return ffi.string(ffi.C.getcwd(ffi.new "char [4096]", 4096));
+        end
     end
-    _fini_cb[#_fini_cb + 1] = function()
-        ffi.C.tcsetattr(1, termio.TCSANOW, pattr_orig);
-    end;
-    term_setup();
+    -- Ensure `ffi` library is unbound
+    ffi = nil;
 
     -- Utilities
     -- Special escapes
@@ -517,22 +648,6 @@ do
         return pri_head, ctrl_args, inter, final, orig;
     end
 
-    local function wait_input(sec, fd)
-        fd = fd or 0;
-        local pfd = fd >= 0
-            and ffi.new("uint8_t[?]", bit.rshift(fd, 3) + 1, {[bit.rshift(fd, 3)] = bit.lshift(1, bit.band(fd, 0x7))})
-            or nil;
-        local ptv = sec >= 0
-            and ffi.new("struct timeval[1]", {{math.modf(sec), 1e6 * math.fmod(sec, 1)}})
-            or nil;
-        local res = ffi.C.select(fd + 1, pfd, nil, nil, ptv);
-        return res > 0;
-    end
-    local function readall_or_block(fd)
-        local buf = ffi.new "int8_t[32]";
-        local len = ffi.C.read(fd or 0, buf, 32);
-        return ffi.string(buf, len);
-    end
     local function readall(fd)
         if not wait_input(0) then
             return "";
@@ -543,7 +658,7 @@ do
     -- Input - key modifiers
     local mod_code = {SHIFT = 0x1, ALT = 0x2, CTRL = 0x4, META = 0x8};
     local function ctrl(ch)
-        return string.char(bit.band(ch:byte(), 0x1f));
+        return string_char(band(ch:byte(), 0x1f));
     end
     local function Mod(key, code, prefix)
         if type(key) == "table" then
@@ -566,13 +681,13 @@ do
     end
     local function mod_key(mod, key)
         local res = key;
-        if bit.band(mod, mod_code.CTRL) ~= 0 then
+        if band(mod, mod_code.CTRL) ~= 0 then
             res = Ctrl(res);
         end
-        if bit.band(mod, mod_code.SHIFT) ~= 0 then
+        if band(mod, mod_code.SHIFT) ~= 0 then
             res = Shift(res);
         end
-        if bit.band(mod, bit.bor(mod_code.ALT, mod_code.META)) ~= 0 then
+        if band(mod, bit.bor(mod_code.ALT, mod_code.META)) ~= 0 then
             res = Meta(res);
         end
         return res;
@@ -676,7 +791,7 @@ do
         end
         if ch == ESC then
             -- Proper tail recursion
-            return handle_esc(Meta, keygen, math.min(sec, 2 * Key.seq_delay));
+            return handle_esc(Meta, keygen, math_min(sec, 2 * Key.seq_delay));
         end
         return mod_func(getch_esc[ch] or getch_esc[false](ch));
     end;
@@ -702,7 +817,7 @@ do
         [ESC] = handle_esc,
         [false] = function(ch)
             if #ch > 0 and ch:byte() < (" "):byte() then
-                return "^" .. string.char(("@"):byte() + ch:byte());
+                return "^" .. string_char(("@"):byte() + ch:byte());
             end
             return ch;
         end,
@@ -716,7 +831,7 @@ do
     local term_x = 0;
     local function move(y, x)
         x = x or 0;
-        io.write(CSI .. math.max(y, 0) + 1 .. ";" .. math.max(x, 0) + 1 .. "H");
+        io_write(CSI .. math_max(y, 0) + 1 .. ";" .. math_max(x, 0) + 1 .. "H");
         term_y, term_x = y, x;
     end
     -- Input - escape sequence interpreter
@@ -777,7 +892,7 @@ do
     end
     local pch_buf = P_buf{{}, idx = 1};
     local pkey_buf = P_buf{{}, idx = 1};
-    local str_to_keys = coroutine.wrap(function(str)
+    local str_to_keys = coroutine_wrap(function(str)
         while true do
             local res = {unpack(pkey_buf[1], pkey_buf.idx)};
             pkey_buf[1] = {};
@@ -799,7 +914,7 @@ do
                         may_yield = false;
                         -- Restore buffer
                         pch_buf, pch_buf_bk = pch_buf_bk, pch_buf;
-                        str = coroutine.yield(unpack(res));
+                        str = coroutine_yield(unpack(res));
                         res = {};
                         -- Merge new content into the buffer
                         pch_buf_bk:push(unpack(pch_buf[1], pch_buf.idx));
@@ -812,7 +927,7 @@ do
                     res[#res + 1] = v;
                 end
             end
-            str = coroutine.yield(unpack(res));
+            str = coroutine_yield(unpack(res));
         end
     end);
     local function getch()
@@ -829,7 +944,7 @@ do
             end
             sec = sec or -1;
             if sec < 0 then
-                io.flush();
+                io_flush();
             end
             if wait_input(sec) then
                 local res = pch_buf:pop_reread();
@@ -844,7 +959,7 @@ do
 
     -- Output utilities
     local function sgr_str(...)
-            return CSI .. table.concat({...}, ";")  .. "m";
+            return CSI .. table_concat({...}, ";")  .. "m";
     end
     local function strip_ansi(str)
         -- The order matters
@@ -853,7 +968,7 @@ do
     local function str_width(str)
         -- Assume UTF-8 is used; remove `gsub` if using Big5
         -- Assume all non-ASCII characters are full-width
-        return #strip_ansi(str):gsub("[\192-\252][\128-\191]*", "  "):gsub("[\128-\191]+", "");
+        return #string_gsub(string_gsub(strip_ansi(str), "[\192-\252][\128-\191]*", "  "), "[\128-\191]+", "");
     end
     local utf8_head_ffz_len = {1, 0, 2, 3, 4, 5, 6, 0, 0};
     local utf8_head_ffz_width = {1, 0, 2, 2, 2, 2, 2, 0, 0};
@@ -863,11 +978,11 @@ do
         [0xf8] = 6, [0xfc] = 7, [0xfe] = 8, [0xff] = 9,
     };
     local function ch_map_ffz(ch, tbl)
-        local byte = bit.bor(0xffffff00, ch:byte() or 0xff);
-        byte = bit.band(byte, bit.arshift(byte, 1));
-        byte = bit.band(byte, bit.arshift(byte, 2));
-        byte = bit.band(byte, bit.arshift(byte, 4));
-        return tbl[ffz_map[bit.band(byte, 0x000000ff)]];
+        local byte = bor(0xffffff00, string_byte(ch) or 0xff);
+        byte = band(byte, arshift(byte, 1));
+        byte = band(byte, arshift(byte, 2));
+        byte = band(byte, arshift(byte, 4));
+        return tbl[ffz_map[band(byte, 0x000000ff)]];
     end
     local function ch_complete_len(ch)
         return ch_map_ffz(ch, utf8_head_ffz_len);
@@ -886,7 +1001,7 @@ do
             res[#res + 1] = ch;
             len = len + w;
         end
-        return table.concat(res);
+        return table_concat(res);
     end
 
     -- UI functions
@@ -910,10 +1025,10 @@ do
             -- Send query and try to read the response for 16 times
             -- Resend query if no valid response is received
             if try == 0 then
-                io.write(CSI .. "6n");
-                io.flush();
+                io_write(CSI .. "6n");
+                io_flush();
             end
-            try = bit.band(try + 1, 0x0f);
+            try = band(try + 1, 0x0f);
             local pri_head, ctrl_args, inter, final;
             local esc = preply:pop_reread();
             if esc == ESC then
@@ -932,13 +1047,12 @@ do
             end
         until pri_head == "" and inter .. final == "R";
         pch_buf:push(unpack(preply[1], preply.idx));
-        io.close();
+        io_close();
         return pos[1] - 1, (pos[2] or 1) - 1;
     end
     local function getmaxyx()
-        local psize = ffi.new "struct winsize[1]";
-        ffi.C.ioctl(0, termio.TIOCGWINSZ, psize);
-        return psize[0].ws_row, psize[0].ws_col;
+        local size = getwinsize();
+        return size.ws_row, size.ws_col;
     end
 
     -- Pause message
@@ -951,16 +1065,16 @@ do
     local function pause(msg)
         local ymax, xmax = getmaxyx();
         if msg == nil then
-            local fg = 30 + math.random(1, 6);
+            local fg = 30 + math_random(1, 6);
             move(ymax - 1, xmax - pause_null_msg_len);
-            io.write(pause_null_msg(fg));
+            io_write(pause_null_msg(fg));
             term_x = xmax - 1;
         else
             local msg_head = sgr_str(0, 34, 46) .. [=[ ★ ]=] .. msg;
             move(ymax - 1, 0);
-            io.write(msg_head .. (" "):rep(xmax - str_width(msg_head) - pause_tail_len));
+            io_write(msg_head .. (" "):rep(xmax - str_width(msg_head) - pause_tail_len));
             move(ymax - 1, xmax - pause_tail_len);
-            io.write(pause_tail);
+            io_write(pause_tail);
             term_x = xmax - 1;
         end
         return getch();
@@ -982,22 +1096,22 @@ do
         -- GCARRY = 0x8,  -- Ignored
     };  -- Combined echo: DreamBBS BBS-Lua Extension
     local function preprocess_data(key, data, cur, w, echo, history)
-        if bit.band(echo, Echo.NUMECHO) ~= 0 then
-            data, sub_count = data:gsub("[^0-9]", "");
+        if band(echo, Echo.NUMECHO) ~= 0 then
+            data, sub_count = string_gsub(data, "[^0-9]", "");
         end
         data = truncate_str(strip_ansi(data), w);
         return data, #data, w, echo, history;
     end
     local function delete(key, data, cur, w, echo, history)
-        local suffix = data:sub(cur + 1):gsub("^.[\128-\191]*", "");
-        return data:sub(1, cur) .. suffix, cur, w, echo, history;
+        local suffix = string_gsub(string_sub(data, cur + 1), "^.[\128-\191]*", "");
+        return string_sub(data, 1, cur) .. suffix, cur, w, echo, history;
     end
     local function left(key, data, cur, w, echo, history)
-        local prefix = data:sub(1, cur):gsub(".[\128-\191]*$", "");
+        local prefix = string_gsub(string_sub(data, 1, cur), ".[\128-\191]*$", "");
         return data, #prefix, w, echo, history;
     end
     local function save_data(key, data, cur, w, echo, history)
-        if bit.band(echo, bit.bor(Echo.PASSECHO, Echo.HIDEECHO)) == 0
+        if band(echo, bit.bor(Echo.PASSECHO, Echo.HIDEECHO)) == 0
                 and str_width(data) > 2 then
             if history.dirty then
                 history[1][history.idx] = data;
@@ -1010,7 +1124,7 @@ do
         -- Need to handle multi-byte character (assume UTF-8)
         ENTER = function(key, data, cur, w, echo, history)
             save_data(key, data, cur, w, echo, history);
-            local removed = table.remove(history[1], history.idx);
+            local removed = table_remove(history[1], history.idx);
             history[1][#history[1] + 1] = removed;
             if str_width(history[1][#history[1]]) <= 2 then
                 history[1][#history[1]] = nil;
@@ -1020,7 +1134,7 @@ do
         end,
         BS = function(key, data, cur, w, echo, history)
             if cur <= 0 then
-                io.write(bell_str);
+                io_write(bell_str);
                 return data, cur, w, echo, history;
             end
             history.dirty = true;
@@ -1028,44 +1142,44 @@ do
         end,
         DEL = function(key, data, cur, w, echo, history)
             if cur >= #data then
-                io.write(bell_str);
+                io_write(bell_str);
                 return data, cur, w, echo, history;
             end
             history.dirty = true;
             return delete(key, data, cur, w, echo, history);
         end,
         LEFT = function(key, data, cur, w, echo, history)
-            if cur <= 0 or bit.band(echo, Echo.HIDEECHO) ~= 0 then
-                io.write(bell_str);
+            if cur <= 0 or band(echo, Echo.HIDEECHO) ~= 0 then
+                io_write(bell_str);
                 return data, cur, w, echo, history;
             end
             return left(key, data, cur, w, echo, history);
         end,
         RIGHT = function(key, data, cur, w, echo, history)
             if cur >= #data then
-                io.write(bell_str);
+                io_write(bell_str);
                 return data, cur, w, echo, history;
             end
-            local suffix = data:sub(cur + 1):gsub("^.[\128-\191]*", "");
+            local suffix = string_gsub(string_sub(data, cur + 1), "^.[\128-\191]*", "");
             return data, #data - #suffix, w, echo, history;
         end,
         HOME = function(key, data, cur, w, echo, history)
-            if cur <= 0 or bit.band(echo, Echo.HIDEECHO) ~= 0 then
-                io.write(bell_str);
+            if cur <= 0 or band(echo, Echo.HIDEECHO) ~= 0 then
+                io_write(bell_str);
                 return data, cur, w, echo, history;
             end
             return data, 0, w, echo, history;
         end,
         END = function(key, data, cur, w, echo, history)
             if cur >= #data then
-                io.write(bell_str);
+                io_write(bell_str);
                 return data, cur, w, echo, history;
             end
             return data, #data, w, echo, history;
         end,
         ["^Y"] = function(key, data, cur, w, echo, history)
             if #data == 0 then
-                io.write(bell_str);
+                io_write(bell_str);
                 return data, cur, w, echo, history;
             end
             history.dirty = true;
@@ -1073,16 +1187,16 @@ do
         end,
         ["^K"] = function(key, data, cur, w, echo, history)
             if cur >= #data then
-                io.write(bell_str);
+                io_write(bell_str);
                 return data, cur, w, echo, history;
             end
             history.dirty = true;
-            return data:sub(1, cur), cur, w, echo, history;
+            return string_sub(data, 1, cur), cur, w, echo, history;
         end,
         UP = function(key, data, cur, w, echo, history)
-            if bit.band(echo, bit.bor(Echo.PASSECHO, Echo.HIDEECHO)) ~= 0
+            if band(echo, bit.bor(Echo.PASSECHO, Echo.HIDEECHO)) ~= 0
                     or history[1][history.idx - 1] == nil then
-                io.write(bell_str);
+                io_write(bell_str);
                 return data, cur, w, echo, history;
             end
             save_data(key, data, cur, w, echo, history);
@@ -1092,9 +1206,9 @@ do
             return preprocess_data(key, data, cur, w, echo, history);
         end,
         DOWN = function(key, data, cur, w, echo, history)
-            if bit.band(echo, bit.bor(Echo.PASSECHO, Echo.HIDEECHO)) ~= 0
+            if band(echo, bit.bor(Echo.PASSECHO, Echo.HIDEECHO)) ~= 0
                     or history[1][history.idx + 1] == nil then
-                io.write(bell_str);
+                io_write(bell_str);
                 return data, cur, w, echo, history;
             end
             save_data(key, data, cur, w, echo, history);
@@ -1106,12 +1220,12 @@ do
         [false] = function(key, data, cur, w, echo, history)
             if #key ~= 1 or key:byte() < (" "):byte()
                   or str_width(data .. key) > w
-                  or (bit.band(echo, Echo.NUMECHO) ~= 0 and key:match("[^0-9]")) then
-                io.write(bell_str);
+                  or (band(echo, Echo.NUMECHO) ~= 0 and key:match("[^0-9]")) then
+                io_write(bell_str);
                 return data, cur, w, echo, history;
             end
             history.dirty = true;
-            return (data:sub(1, cur) .. key .. data:sub(cur + 1)), cur + 1, w, echo, history;
+            return (string_sub(data, 1, cur) .. key .. string_sub(data, cur + 1)), cur + 1, w, echo, history;
         end,
     };
     getdata_keybind[ctrl"D"] = getdata_keybind.DEL;
@@ -1121,54 +1235,54 @@ do
     getdata_keybind[ctrl"E"] = getdata_keybind.END;
     local function getdata_display(data, cur, w, echo)
         local w_data = str_width(data);
-        local w_cur = ch_complete_len(data:sub(cur + 1, cur + 1));
-        local prefix = data:sub(1, cur);
+        local w_cur = ch_complete_len(string_sub(data, cur + 1, cur + 1));
+        local prefix = string_sub(data, 1, cur);
         local w_prefix = str_width(prefix);
-        local ch_cur = data:sub(cur + 1, cur + 1 + w_cur - 1);
-        local suffix = data:sub(cur + 1 + w_cur);
-        local passecho = bit.band(echo, Echo.PASSECHO) ~= 0;
+        local ch_cur = string_sub(data, cur + 1, cur + 1 + w_cur - 1);
+        local suffix = string_sub(data, cur + 1 + w_cur);
+        local passecho = band(echo, Echo.PASSECHO) ~= 0;
         if passecho then
             prefix = ("*"):rep(w_prefix);
             ch_cur = ("*"):rep(str_width(ch_cur));
             suffix = ("*"):rep(str_width(suffix));
         end
-        io.write(clrtoeol_str .. sgr_str(0, 30, 47) .. prefix);
+        io_write(clrtoeol_str .. sgr_str(0, 30, 47) .. prefix);
         if #ch_cur == 0 and #suffix == 0 then
             if w - w_data > 0 then
-                io.write(sgr_str(1, 37, 40, 100) .. " "  .. sgr_str(0, 30, 47) .. suffix .. (" "):rep(w - w_data - 1));
+                io_write(sgr_str(1, 37, 40, 100) .. " "  .. sgr_str(0, 30, 47) .. suffix .. (" "):rep(w - w_data - 1));
             end
         else
-            io.write(sgr_str(1, 37, 40, 100) .. ch_cur .. sgr_str(0, 30, 47) .. suffix .. (" "):rep(w - w_data));
+            io_write(sgr_str(1, 37, 40, 100) .. ch_cur .. sgr_str(0, 30, 47) .. suffix .. (" "):rep(w - w_data));
         end
-        io.write(sgr_str());
+        io_write(sgr_str());
         term_x = term_x + w;
         return w_prefix;
     end
     local function getdata(w, echo, str)
-        w = math.max(w - 1, 0);  -- `- 1` for C-string ending `'\0'`
+        w = math_max(w - 1, 0);  -- `- 1` for C-string ending `'\0'`
         echo = echo ~= Echo.NOECHO and (echo or 0) or Echo.HIDEECHO;
         local y, x = getyx();
         local data, cur = preprocess_data("", str or "", 0, w, echo, history);
         history[1][history.idx] = data;
-        if bit.band(echo, Echo.HIDEECHO) == 0 then
+        if band(echo, Echo.HIDEECHO) == 0 then
             move(y, x + getdata_display(data, cur, w, echo));
         end
         repeat
             local key = getch();
             data, cur = (getdata_keybind[key] or getdata_keybind[false])(key, data, cur, w, echo, history);
-            if bit.band(echo, Echo.HIDEECHO) == 0 then
+            if band(echo, Echo.HIDEECHO) == 0 then
                 move(y, x);
                 move(y, x + getdata_display(data, cur, w, echo));
             end
         until key == "ENTER";
-        if bit.band(echo, Echo.LCECHO) ~= 0 then
+        if band(echo, Echo.LCECHO) ~= 0 then
             data = data:lower();
         end
-        if bit.band(echo, Echo.HIDEECHO) == 0 then
+        if band(echo, Echo.HIDEECHO) == 0 then
             move(y, x);
             getdata_display(data, cur, str_width(data), echo);
         end
-        io.write(clrtoeol_str .. "\n");
+        io_write(clrtoeol_str .. "\n");
         term_y, term_x = term_y + 1, 0;
         return data;
     end
@@ -1177,10 +1291,10 @@ do
     bbs = {
         addstr = function(...)
             local ymax, xmax = getmaxyx();
-            local msg, r = table.concat{...}:gsub("\n", clrtoeol_str .. "\n");
+            local msg, r = table_concat{...}:gsub("\n", clrtoeol_str .. "\n");
             r = r + ({msg:gsub(("[^\n]"):rep(xmax), "")})[2];
             local tail = msg:match("\n(.*)$");
-            io.write(msg);
+            io_write(msg);
             term_y = term_y + r;
             if tail ~= nil then
                 term_x = str_width(tail) % xmax;
@@ -1194,7 +1308,7 @@ do
         end,
         print = function(...)
             bbs.addstr(...);
-            io.write(clrtoeol_str .. "\n");
+            io_write(clrtoeol_str .. "\n");
             term_y, term_x = term_y + 1, 0;
         end,
         getyx = getyx,
@@ -1203,39 +1317,39 @@ do
         moverel = function(dy, dx)
             dx = dx or 0;
             if dy > 0 then
-                io.write(CSI .. dy .. "B");
+                io_write(CSI .. dy .. "B");
             elseif dy < 0 then
-                io.write(CSI .. -dy .. "A");
+                io_write(CSI .. -dy .. "A");
             end
             if dx > 0 then
-                io.write(CSI .. dx .. "C");
+                io_write(CSI .. dx .. "C");
             elseif dx < 0 then
-                io.write(CSI .. -dx .. "D");
+                io_write(CSI .. -dx .. "D");
             end
             term_y, term_x = term_y + dy, term_x + dx;
         end,
         clear = function()
-            io.write(CSI .. "2J");
+            io_write(CSI .. "2J");
             move(0, 0);
         end,
-        clrtoeol = function() io.write(clrtoeol_str); end,
-        clrtobot = function() io.write(CSI .. "J"); end,
+        clrtoeol = function() io_write(clrtoeol_str); end,
+        clrtobot = function() io_write(CSI .. "J"); end,
         rect = function(r, c, ttl)
             local y, x = getyx();
             for kr = 0, r - 1, 1 do
                 move(y + kr, x);
-                io.write((" "):rep(c));
+                io_write((" "):rep(c));
             end
             if ttl ~= nil then
                 -- Center the title, both vertically and horizontally
                 move(y + (r - #ttl:gsub("[^\n]", "") - 1) / 2, x + (c - str_width(ttl)) / 2)
-                io.write(ttl);
+                io_write(ttl);
             end
             move(y, x);
         end,
-        refresh = io.flush,
+        refresh = io_flush,
         attrset = function(...)
-            io.write(sgr_str(...));
+            io_write(sgr_str(...));
         end,
         ANSI_COLOR = sgr_str,
         ANSI_RESET = sgr_str(),
@@ -1246,7 +1360,7 @@ do
         getdata = getdata,
         pause = pause,
         kbhit = function(sec)
-            io.flush();
+            io_flush();
             return wait_input(sec);
         end,
         kbreset = function()
@@ -1257,21 +1371,20 @@ do
             pkey_buf.idx = 1;
         end,
         kball = function(sec)
-            io.flush();
+            io_flush();
             -- Sleep first
             bbs.sleep(sec);
             -- Then read
             return str_to_keys(readall());
         end,
-        time = os.time,
-        ctime = os.date,
+        time = os_time,
+        ctime = os_date,
         clock = function()
-            local ptp = ffi.new "struct timespec[1]";
-            ffi.C.clock_gettime(clock.CLOCK_REALTIME, ptp);
-            return tonumber(ptp[0].tv_sec) + 1e9 * tonumber(ptp[0].tv_nsec);
+            local tp = getclocktp();
+            return tonumber(tp.tv_sec) + 1e9 * tonumber(tp.tv_nsec);
         end,
         sleep = function(sec)
-            io.flush();
+            io_flush();
             wait_input(sec, -1);
         end,
         userid = "guest",
@@ -1296,11 +1409,11 @@ do
     local store_cate = {GLOBAL = "global", USER = "user"};
     local function get_global_path_tbl(hash)
         -- Why does the original BBS-Lua implementation use `U`?
-        return {"luastore", "v1_U" .. bit.tohex(hash, 8)};
+        return {"luastore", "v1_U" .. bit_tohex(hash, 8)};
     end
     local function get_user_path_tbl(userid, hash)
         -- Why does the original BBS-Lua implementation use `G`?
-        return {"usr", userid:sub(1, 1), userid, ".luastore", "v1_G" .. bit.tohex(hash, 8)};
+        return {"usr", string_sub(userid, 1, 1), userid, ".luastore", "v1_G" .. bit_tohex(hash, 8)};
     end
     local function store_path(cate, userid, hash)
         local path_tbl;
@@ -1314,7 +1427,7 @@ do
         end
         local path = BBSHOME;
         for k, v in ipairs(path_tbl) do
-            ffi.C.mkdir(path, tonumber("0755", 8));
+            mkdir(path, "0755");
             path = path .. "/" .. v;
         end
         return path;
@@ -1329,21 +1442,21 @@ do
         for ch in each_ch(str) do
             -- Prevent the result from exceeding the 51-bit integer range
             -- Signness does not matter (no sign extension)
-            local res_ll = bit.band(res, 0xffff) * bit.band(fnv.FNV_32_PRIME, 0xffff);
-            local res_lh = bit.band(res, 0xffff) * bit.rshift(fnv.FNV_32_PRIME, 16);
-            local res_hl = bit.rshift(res, 16) * bit.band(fnv.FNV_32_PRIME, 0xffff);
-            res = bit.lshift(res_lh + res_hl, 16) + res_ll;
-            res = bit.bxor(res, ch:byte());
+            local res_ll = band(res, 0xffff) * band(fnv.FNV_32_PRIME, 0xffff);
+            local res_lh = band(res, 0xffff) * rshift(fnv.FNV_32_PRIME, 16);
+            local res_hl = rshift(res, 16) * band(fnv.FNV_32_PRIME, 0xffff);
+            res = lshift(res_lh + res_hl, 16) + res_ll;
+            res = bxor(res, string_byte(ch));
         end
         return res;
     end
 
-    local curr_dir = ffi.string(ffi.C.getcwd(ffi.new "char [4096]", 4096));
+    local curr_dir = getpwd();
     -- Function for initializing a new instance of BBS-Lua store API
     function store_new(path)
         -- Normalize and hash the path
         local store_hash_path = path;
-        store_hash_path = store_hash_path:gsub("^%.?/", "");
+        store_hash_path = string_gsub(store_hash_path, "^%.?/", "");
         if not store_hash_path:match("^/") then
             store_hash_path = curr_dir .. "/" .. store_hash_path;
         end
@@ -1363,7 +1476,7 @@ do
                 if path == nil then
                     return nil, "invalid store category";
                 end
-                local file = io.open(path, "r");
+                local file = io_open(path, "r");
                 if file == nil then
                     return nil, "failed to open file: " .. path;
                 end
@@ -1380,7 +1493,7 @@ do
                 if path == nil then
                     return false, "invalid store category";
                 end
-                local file = io.open(path, "w");
+                local file = io_open(path, "w");
                 if file == nil then
                     return false, "failed to open file: " .. path;
                 end
@@ -1405,40 +1518,6 @@ do
     end
 end
 
--- Make BitOp compatible with deprecated bitlib used by older BBS-Lua versions
-bit.cast = bit.cast or bit.tobit;
-
--- BBS-Lua on Lua Extensions
--- Runtime version
-local __RUNTIME = jit and jit.version or _VERSION;
--- A getter-only debug library for convenience
-local debug_bbslua = {
-    getfenv = debug.getfenv,
-    gethook = debug.gethook,
-    getinfo = debug.getinfo,
-    getlocal = debug.getlocal,
-    getmetatable = debug.getmetatable,
-    getregistry = debug.getregistry,
-    getupvalue = debug.getupvalue,
-    traceback = debug.traceback,
-};
--- An empty package library so that users can define their own modules
-local module_bbslua = module;
-local require_bbslua = require;
-local package_bbslua = {
-    loaded = {
-        package = package_bbslua,
-        string = string,
-        table = table,
-        math = math,
-        debug = debug_bbslua,
-        bit = bit,
-    },
-    loaders = {function(mod) return preload[mod]; end},
-    preload = {},
-    seeall = package.seeall,
-};
-
 local function _fini()
     if _fini_cb ~= nil then
         for k = #_fini_cb, 1, -1 do
@@ -1447,198 +1526,215 @@ local function _fini()
     end
 end
 local function _init(...)
-    math.randomseed(bbs.clock());
+    math_randomseed(bbs.clock());
 
     local function report_error(errmsg, pausemsg)
         local ymax, xmax = bbs.getmaxyx();
-        local r = #errmsg:gsub("[^\n]", "") + 1;
+        local r = #string_gsub(errmsg, "[^\n]", "") + 1;
         bbs.move(ymax - 1 - r, 0);
         bbs.attrset(0, 1, 44);
         bbs.rect(r, xmax);
         bbs.print(errmsg);
         bbs.pause(pausemsg);
     end
+    local traceback = debug.traceback;
 
     local function launcher(...)
-        local store = store_new(arg[0]);
+        local ymax, xmax = bbs.getmaxyx();
+        local toc;
+        local prog;
+        do
+            local store = store_new(arg[0]);
 
-        bbs.attrset();
-        bbs.clrtobot();
-        bbs.print[[
+            bbs.attrset();
+            bbs.clrtobot();
+            bbs.print[[
 BBS-Lua on Lua - x86-64 Linux
 Copyright (c) 2020 Iweidieng Iep <iid@ccns.ncku.edu.tw>
 
 BBS-Lua is a project run by Hung-Te Lin <piaip@csie.org>
 For more information, please refer to https://term.ptt2.cc BBSLua
-]];
-        local conf = obj_from_str(store.load(store.GLOBAL) or "{}");
-        local ymax, xmax = bbs.getmaxyx();
+    ]];
+            local conf = obj_from_str(store.load(store.GLOBAL) or "{}");
 
-        bbs.print("Configurations: ");
-        bbs.print("Lua runtime: ", __RUNTIME)
-        bbs.print("Lua API version: ", _VERSION)
-        bbs.print("Terminal size: ", ymax, "x", xmax);
+            bbs.print("Configurations: ");
+            bbs.print("Lua runtime: ", __RUNTIME)
+            bbs.print("Lua API version: ", _VERSION)
+            bbs.print("Terminal size: ", ymax, "x", xmax);
 
-        bbs.addstr("userid: ");
-        conf.userid = conf.userid or bbs.userid;
-        conf.userid = bbs.getdata(13, bbs.DOECHO, conf.userid);
-        bbs.userid = conf.userid;
+            bbs.addstr("userid: ");
+            conf.userid = conf.userid or bbs.userid;
+            conf.userid = bbs.getdata(13, bbs.DOECHO, conf.userid);
+            bbs.userid = conf.userid;
 
-        bbs.addstr("usernick: ");
-        conf.usernick = conf.usernick or bbs.usernick;
-        conf.usernick = bbs.getdata(25, bbs.DOECHO, conf.usernick);
-        bbs.usernick = conf.usernick;
+            bbs.addstr("usernick: ");
+            conf.usernick = conf.usernick or bbs.usernick;
+            conf.usernick = bbs.getdata(25, bbs.DOECHO, conf.usernick);
+            bbs.usernick = conf.usernick;
 
-        bbs.addstr("sitename: ");
-        conf.sitename = conf.sitename or bbs.sitename;
-        conf.sitename = bbs.getdata(25, bbs.DOECHO, conf.sitename);
-        bbs.sitename = conf.sitename;
-        bbs.print();
+            bbs.addstr("sitename: ");
+            conf.sitename = conf.sitename or bbs.sitename;
+            conf.sitename = bbs.getdata(25, bbs.DOECHO, conf.sitename);
+            bbs.sitename = conf.sitename;
+            bbs.print();
 
-        local save_res, e = store.save(store.GLOBAL, objstr(conf, false));
-        if save_res then
-            bbs.print("Configuration saved.");
-        else
-            bbs.print("Failed to save configuration: ", e);
-        end
-
-        -- Prepare for loading the program
-        local prog_path = arg[1];
-        if prog_path == nil or prog_path == "" then
-            bbs.print("\nUsage: `" .. arg[0] .. " <program-path>`");
-            bbs.addstr("Enter path to BBS-Lua program: ");
-            prog_path = bbs.getdata(48, bbs.DOECHO, conf.last_prog_path);
-        end
-        -- Test whether the path is valid
-        local file, err = io.open(prog_path);
-        if err ~= nil then
-            report_error(err, "BBS-Lua 載入失敗 ('" .. prog_path .. "' 不是有效檔案路徑)。");
-            return;
-        end
-        bbs.pause();
-
-        -- Prepare for loading TOC (table of content/summary)
-        local toc = {};
-        local toc_tags = {
-            interface = true,
-            title = true,
-            notes = true,
-            author = true,
-            version = true,
-            date = true,
-            latestref = true,
-        };
-        local bbslua_pat = [[^--#BBSLUA$]];
-        local toctag_pat = [[^ *%-%-+ *([_A-Za-z][_0-9A-Za-z]*) *: *(.*) *$]];
-        local is_code = false;
-        local is_toc = true;
-        local prog_global = {
-            -- Lua standard library
-            assert = assert,
-            collectgarbage = collectgarbage,
-            error = error,
-            getfenv = getfenv,
-            getmetatable = getmetatable,
-            ipairs = ipairs,
-            next = next,
-            pairs = pairs,
-            pcall = pcall,
-            rawequal = rawequal,
-            rawget = rawget,
-            rawlen = rawlen,
-            rawset = rawset,
-            select = select,
-            setfenv = setfenv,
-            setmetatable = setmetatable,
-            tonumber = tonumber,
-            tostring = tostring,
-            type = type,
-            unpack = unpack,
-            _VERSION = _VERSION,
-            xpcall = xpcall,
-
-            coroutine = coroutine,
-            string = string,
-            table = table,
-            math = math,
-            bit = bit,
-
-            -- BBS-Lua Exclusive API
-            print = bbs.print,
-            bbs = bbs,
-            toc = toc,
-            store = store_new(prog_path),
-
-            -- BBS-Lua on Lua Extensions
-            __RUNTIME = __RUNTIME,
-            module = module_bbslua,
-            require = require_bbslua,
-            package = package_bbslua,
-            debug = debug_bbslua,
-
-            -- Global Lua libraries not in BBS-Lua
-            io = nil,
-            os = nil,
-            jit = nil,
-            ffi = nil,
-
-            -- Global Lua API functions not in BBS-Lua
-            dofile = nil,
-            loadfile = nil,
-            load = nil,
-            loadstring = nil,
-        };
-        prog_global._G = prog_global;
-
-        -- Load the program and TOC, with an isolated executation environment
-        local prog, err = load(coroutine.wrap(function()
-            -- Load the program line by line to handle plain text and TOC
-            for line in io.lines(prog_path) do
-                if line:match(bbslua_pat) then
-                    if is_code then
-                        -- End of code
-                        break;
-                    end
-                    -- Start of code
-                    is_code = true;
-                    coroutine.yield("\n");  -- Ignore this line
-                elseif is_code then
-                    local k, v = line:match(toctag_pat);
-                    if is_toc then
-                        if k and v then
-                            if toc_tags[k:lower()] then
-                                toc[k:lower()] = v;
-                            end
-                        else
-                            is_toc = false;
-                        end
-                    end
-                    coroutine.yield(line .. "\n");
-                else
-                    -- Plain text before code
-                    -- Replace with empty lines to keep the line count
-                    coroutine.yield("\n");
-                end
+            local save_res, e = store.save(store.GLOBAL, objstr(conf, false));
+            if save_res then
+                bbs.print("Configuration saved.");
+            else
+                bbs.print("Failed to save configuration: ", e);
             end
-        end),
-        prog_path, "t", prog_global);
-        -- Handling loading errors
-        if err ~= nil then
-            report_error(err, [[BBS-Lua 載入失敗。]]);
-            return;
-        elseif not is_code then
-            bbs.pause([[BBS-Lua 載入失敗 (檔案不含 BBS-Lua 程式)。]]);
-            return;
-        end
 
-        -- `prog_path` is valid; save it in the configuration
-        conf.last_prog_path = prog_path;
-        -- Configuration changed; save again (ignore errors)
-        store.save(store.GLOBAL, objstr(conf, false));
+            -- Prepare for loading the program
+            local prog_path = arg[1];
+            if prog_path == nil or prog_path == "" then
+                bbs.print("\nUsage: `" .. arg[0] .. " <program-path>`");
+                bbs.addstr("Enter path to BBS-Lua program: ");
+                prog_path = bbs.getdata(48, bbs.DOECHO, conf.last_prog_path);
+            end
+            -- Test whether the path is valid
+            local file, err = io_open(prog_path);
+            if err ~= nil then
+                report_error(err, "BBS-Lua 載入失敗 ('" .. prog_path .. "' 不是有效檔案路徑)。");
+                return;
+            end
+            -- Unbind `arg`, which is not in BBS-Lua
+            arg = nil;
+            bbs.pause();
+
+            -- Prepare for loading TOC (table of content/summary)
+            toc = {};
+            local toc_tags = {
+                interface = true,
+                title = true,
+                notes = true,
+                author = true,
+                version = true,
+                date = true,
+                latestref = true,
+            };
+            local bbslua_pat = [[^--#BBSLUA$]];
+            local toctag_pat = [[^ *%-%-+ *([_A-Za-z][_0-9A-Za-z]*) *: *(.*) *$]];
+            local is_code = false;
+            local is_toc = true;
+
+            -- Inner sandboxing
+            local prog_global = {
+                -- Lua standard library
+                assert = assert,
+                collectgarbage = collectgarbage,
+                error = error,
+                getfenv = getfenv,
+                getmetatable = getmetatable,
+                ipairs = ipairs,
+                next = next,
+                pairs = pairs,
+                pcall = pcall,
+                rawequal = rawequal,
+                rawget = rawget,
+                rawlen = rawlen,
+                rawset = rawset,
+                select = select,
+                setfenv = setfenv,
+                setmetatable = setmetatable,
+                tonumber = tonumber,
+                tostring = tostring,
+                type = type,
+                unpack = unpack,
+                _VERSION = _VERSION,
+                xpcall = xpcall,
+
+                coroutine = coroutine,
+                string = string,
+                table = table,
+                math = math,
+                bit = bit,
+
+                -- BBS-Lua Exclusive API
+                print = bbs.print,
+                bbs = bbs,
+                toc = toc,
+                store = store_new(prog_path),
+
+                -- BBS-Lua on Lua Extensions
+                __RUNTIME = __RUNTIME,
+                module = module,
+                require = require,
+                package = package_bbslua,
+                debug = debug_bbslua,
+
+                -- Global Lua libraries not in BBS-Lua
+                io = nil,
+                os = nil,
+                jit = nil,
+                ffi = nil,
+
+                -- Global Lua API functions not in BBS-Lua
+                dofile = nil,
+                loadfile = nil,
+                load = nil,
+                loadstring = nil,
+            };
+            prog_global._G = prog_global;
+
+            -- Load the program and TOC, with an isolated executation environment
+            local err;
+            prog, err = basic_load(coroutine_wrap(function()
+                -- Load the program line by line to handle plain text and TOC
+                for line in io_lines(prog_path) do
+                    if line:match(bbslua_pat) then
+                        if is_code then
+                            -- End of code
+                            break;
+                        end
+                        -- Start of code
+                        is_code = true;
+                        coroutine_yield("\n");  -- Ignore this line
+                    elseif is_code then
+                        local k, v = line:match(toctag_pat);
+                        if is_toc then
+                            if k and v then
+                                if toc_tags[k:lower()] then
+                                    toc[k:lower()] = v;
+                                end
+                            else
+                                is_toc = false;
+                            end
+                        end
+                        coroutine_yield(line .. "\n");
+                    else
+                        -- Plain text before code
+                        -- Replace with empty lines to keep the line count
+                        coroutine_yield("\n");
+                    end
+                end
+            end),
+            prog_path, "t", prog_global);
+            -- Handling loading errors
+            if err ~= nil then
+                report_error(err, [[BBS-Lua 載入失敗。]]);
+                return;
+            elseif not is_code then
+                bbs.pause([[BBS-Lua 載入失敗 (檔案不含 BBS-Lua 程式)。]]);
+                return;
+            end
+
+            -- `prog_path` is valid; save it in the configuration
+            conf.last_prog_path = prog_path;
+            -- Configuration changed; save again (ignore errors)
+            store.save(store.GLOBAL, objstr(conf, false));
+
+            -- Make the current environment the same as the isolated environment
+            basic_load = nil;
+            setfenv(0, prog_global);
+
+            -- Free memory for unbound API
+            collectgarbage();
+        end
 
         local function stacked_print(y, ...)
-            local str = table.concat{...};
-            local h = #str:gsub("[^\n]", "") + 1;
+            local str = table_concat{...};
+            local h = #string_gsub(str, "[^\n]", "") + 1;
             bbs.move(y - h, x);
             bbs.rect(h, xmax);
             bbs.addstr(str);
@@ -1648,7 +1744,7 @@ For more information, please refer to https://term.ptt2.cc BBSLua
 
         -- Check interface
         local function vercmp(lhs, rhs)
-            for v in zipiter({lhs:gmatch("[0-9]+")}, {rhs:gmatch("[0-9]+")}) do
+            for v in zipiter({string_gmatch(lhs, "[0-9]+")}, {string_gmatch(rhs, "[0-9]+")}) do
                 local lv, rv = unpack(v);
                 if (lv == nil and rv > 0) or lv < rv then
                     return -1;
@@ -1684,11 +1780,11 @@ For more information, please refer to https://term.ptt2.cc BBSLua
         local toc_info = {};
         for k, v in ipairs(toc_items) do
             if toc[v[1]] ~= nil then
-                table.insert(toc_info, "  " .. v[2] .. ": " .. toc[v[1]]);
+                table_insert(toc_info, "  " .. v[2] .. ": " .. toc[v[1]]);
             end
         end
         bbs.attrset(0, 1, 30, 47);
-        y = stacked_print(y, "\n", table.concat(toc_info, "\n"), "\n");
+        y = stacked_print(y, "\n", table_concat(toc_info, "\n"), "\n");
 
         bbs.attrset(0, 37, 44);
         y = stacked_print(y,
@@ -1701,15 +1797,15 @@ For more information, please refer to https://term.ptt2.cc BBSLua
     end
 
     local co;
-    co = coroutine.create(function(...)
+    co = coroutine_create(function(...)
         local args = {...};
         return xpcall(
             function() return launcher(unpack(args)); end,
-            function(e) return debug.traceback(co, e, 1); end);
+            function(e) return traceback(co, e, 1); end);
     end);
-    local res, res_co, e = coroutine.resume(co, ...);
+    local res, res_co, e = coroutine_resume(co, ...);
     if not res_co and e ~= nil then
-        if not e:match("^[^\n]*interrupted!\n") then
+        if not string_match(e, "^[^\n]*interrupted!\n") then
             report_error(e, [[BBS-Lua 執行結束 (程式發生錯誤)。]]);
         else
             report_error(e, [[BBS-Lua 執行結束 (使用者中斷)。]]);
