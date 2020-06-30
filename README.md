@@ -3,7 +3,7 @@ Run BBS-Lua on LuaJIT
 
 `./bbslua.lua <program-path>`
 
-## Prerequest
+## Prerequisite
 - x86-64 Linux\
     For other platform, you may need to change the constant definition (`termio` and `clock`) in `bbslua.lua` to make it work correctly.
 - LuaJIT >= 2.1.0-beta3\
@@ -64,7 +64,7 @@ Table legend:
 | `bbs.getdata`       | `(w, echo=bbs.DOECHO, str="")` ↦ `(data: string)`             | - Open an input field at the cursor and wait for the input to complete. <br> - Return the input. <br> - `echo` controls how the input is displayed and processed. <br> - `0` causes the input text to be invisible. <br> - Other values have implementation-defined effects. <br> - `str` is the initial text in the input field. | See the constant table for available `echo` values in `bbslua.lua`. |
 | `bbs.getstr`        | `(w, echo=bbs.DOECHO, str="")` ↦ `(data: string)`             | An alias to `bbs.getdata`                                                                                                                                                                                                                                                                                                         |                                                                     |
 | `bbs.pause`         | `(msg=nil)` ↦ `(key: string)`                                 | - Display a pause message `msg` with implementation-defined appearance. The message can be dismissed with any key. <br> - If `msg` presents, another implementation-defined appearance may be used instead. <br> - Return the key used to dismiss the message.                                                                    |                                                                     |
-| `bbs.kbhit`         | `(sec)` ↦ `(hit: boolean)`                                    | - Wait for a key from user input for atmost `sec` seconds (can be a decimal). <br> - Return whether any key is pressed. <br> - The key, if any, remains unprocessed.                                                                                                                                                              |                                                                     |
+| `bbs.kbhit`         | `(sec)` ↦ `(hit: boolean)`                                    | - Wait for a key from user input for at most `sec` seconds (can be a decimal). <br> - Return whether any key is pressed. <br> - The key, if any, remains unprocessed.                                                                                                                                                             |                                                                     |
 | `bbs.kbreset`       | `()` ↦ `()`                                                   | Ignore all unprocessed buffered inputs.                                                                                                                                                                                                                                                                                           |                                                                     |
 | `bbs.kball`         | `(sec)` ↦ `(keys: string...)`                                 | Wait for `sec` seconds (can be a decimal) and then return all keys pressed during the waiting.                                                                                                                                                                                                                                    |                                                                     |
 | _`bbs.time`_        | _`(table=nil)`_ ↦ `(time: number)`                            | Get a number representing the time. <br> - _`table` can be used to specify a time different from now._                                                                                                                                                                                                                            | Aliases to `os.time(table)` in `bbslua.lua`                         |
@@ -83,7 +83,7 @@ Table legend:
 | `bbs.interface`    | ~~`"0.201": string`~~                  | The BBS-Lua API level of the implementation                                     | `number` in the C implementation.                        |
 | **`bbs.NOECHO`**   | `0x0: number`                          | The `echo` value for instructing `bbs.getdata` to make the input text invisible | Has the same effect as `bbs.HIDEECHO` in `bbslua.lua`.   |
 | **`bbs.DOECHO`**   | `0x1: number`                          | The default `echo` value for `bbs.getdata`                                      | Not a flag, but can be combined with other `echo` flags. |
-| **`bbs.LCECHO`**   | `0x2: number`                          | The `echo` flag for instructing `bbs.getdata` to convert input into lowercases  | Can be combined with other `echo` flags.                 |
+| **`bbs.LCECHO`**   | `0x2: number`                          | The `echo` flag for instructing `bbs.getdata` to convert input into lowercase  | Can be combined with other `echo` flags.                 |
 | **`bbs.NUMECHO`**  | `0x4: number`                          | Instruct `bbs.getdata` to accept only number digits                             | Can be combined with others.                             |
 | **`bbs.PASSECHO`** | `0x10: number`                         | Instruct `bbs.getdata` to draw the input text as asterisks.                     | Can be combined with others.                             |
 | **`bbs.HIDEECHO`** | `0x20: number`                         | Instruct `bbs.getdata` to not drawing the input field at all.                   | Can be combined with others.                             |
@@ -109,10 +109,10 @@ Table legend:
 | `store.limit`   | `(cate: string)`                                                | Get the maximum permitted file size for given category, in bytes                                                                                              |      |
 | `store.iolimit` | `()` ↦ `(max: number)`                                          | Get the maximum permitted number of times that `store.load` and `store.save` may open files                                                                   |      |
 
-| Constant       | Value              | Description                                      | Note |
-| -------------- | ------------------ | ------------------------------------------------ | ---- |
-| `store.USER`   | `"user": string`   | The category for per user storage of the program |      |
-| `store.GLOBAL` | `"global": string` | The category for sitewide storage of the program |      |
+| Constant       | Value              | Description                                       | Note |
+| -------------- | ------------------ | ------------------------------------------------- | ---- |
+| `store.USER`   | `"user": string`   | The category for per user storage of the program  |      |
+| `store.GLOBAL` | `"global": string` | The category for site-wide storage of the program |      |
 
 ### `bit` library (Lua BitOp with extension)
 
