@@ -1345,8 +1345,13 @@ do
             end
             if ttl ~= nil then
                 -- Center the title, both vertically and horizontally
-                move(y + (r - #string_gsub(ttl, "[^\n]", "") - 1) / 2, x + (c - str_width(ttl)) / 2)
-                io_write(ttl);
+                local r_ttl = #string_gsub(ttl, "[^\n]", "") + 1;
+                local kr = 0;
+                for line in string_gmatch(ttl, "[^\n]+") do
+                    move(y + (r - r_ttl) / 2 + kr, x + (c - str_width(line)) / 2);
+                    io_write(line);
+                    kr = kr + 1;
+                end
             end
             move(y, x);
         end,
