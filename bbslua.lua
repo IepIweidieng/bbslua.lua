@@ -832,7 +832,7 @@ do
     local term_y = 0;
     local term_x = 0;
     local function move(y, x)
-        x = x or 0;
+        y, x = y and math_modf(y) or 0, x and math_modf(x) or 0;
         io_write(CSI .. math_max(y, 0) + 1 .. ";" .. math_max(x, 0) + 1 .. "H");
         term_y, term_x = y, x;
     end
@@ -1317,7 +1317,7 @@ do
         getmaxyx = getmaxyx,
         move = move,
         moverel = function(dy, dx)
-            dx = dx or 0;
+            dy, dx = math_fmod(dy), dx and math_fmod(dx) or 0;
             if dy > 0 then
                 io_write(CSI .. dy .. "B");
             elseif dy < 0 then
@@ -1337,6 +1337,7 @@ do
         clrtoeol = function() io_write(clrtoeol_str); end,
         clrtobot = function() io_write(CSI .. "J"); end,
         rect = function(r, c, ttl)
+            c = math_max(c, 0);
             local y, x = getyx();
             for kr = 0, r - 1, 1 do
                 move(y + kr, x);
@@ -1363,7 +1364,7 @@ do
         pause = pause,
         kbhit = function(sec)
             io_flush();
-            return wait_input(sec);
+            return wait_input(sec or 0);
         end,
         kbreset = function()
             flush_input()
@@ -1374,8 +1375,10 @@ do
         end,
         kball = function(sec)
             io_flush();
-            -- Sleep first
-            bbs.sleep(sec);
+            -- Sleep first if needed
+            if sec and sec > 0 then
+                bbs.sleep(sec);
+            end
             -- Then read
             return str_to_keys(readall());
         end,
@@ -1387,7 +1390,9 @@ do
         end,
         sleep = function(sec)
             io_flush();
-            wait_input(sec, -1);
+            if sec > 0 then
+                wait_input(sec, -1);
+            end
         end,
         userid = "guest",
         usernick = "夢之大地訪客",
