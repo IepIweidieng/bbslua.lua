@@ -78,6 +78,8 @@ local string_byte = string.byte;
 local string_char = string.char;
 local string_gmatch = string.gmatch;
 local string_gsub = string.gsub;
+local string_format = string.format;
+local string_rep = string.rep;
 
 local table_concat = table.concat;
 local table_remove = table.remove;
@@ -145,9 +147,9 @@ function objstr(obj, lookup)
     if type(obj) == "string" then
         -- Prevent escaped newlines in short strings
         if #obj <= 8 then
-            return (("%q"):format(obj):gsub("\\\n", "\\n"));
+            return (string_gsub(string_format("%q", obj), "\\\n", "\\n"));
         end
-        return ("%q"):format(obj);
+        return string_format("%q", obj);
     end
     if type(obj) ~= "table" then
         return tostring(obj);
@@ -611,16 +613,16 @@ do
         end
 
         -- Private-use parameter string
-        if ch:match("<=>?") then
+        if string_match(ch, "<=>?") then
             orig = orig .. ch;
             pri_head = ch;
             ch = keygen(Key.seq_delay, true);
         end
         -- Standard parameter string
         -- Cannot handle non-trivial private-use format
-        while ch:match("[0-9;]") do
+        while string_match(ch, "[0-9;]") do
             orig = orig .. ch;
-            if ch:match("[0-9]") then
+            if string_match(ch, "[0-9]") then
                 ctrl_args[arg_idx] = 10 * ctrl_args[arg_idx] + tonumber(ch);
             else
                 arg_idx = arg_idx + 1;
@@ -629,19 +631,19 @@ do
             ch = keygen(Key.seq_delay, true);
         end
         -- Non-parsable part of parameter string goes here
-        while ch:match("[0-9:;<=>?]") do
+        while string_match(ch, "[0-9:;<=>?]") do
             orig = orig .. ch;
             ctrl_args.rest = ctrl_args.rest .. ch;
             ch = keygen(Key.seq_delay, true);
         end
         -- Intermediate bytes
-        while ch:match("[ -/]") do
+        while string_match(ch, "[ -/]") do
             orig = orig .. ch;
             inter = inter .. ch;
             ch = keygen(Key.seq_delay, true);
         end
         -- Final byte
-        if ch:match("[@-~]") then
+        if string_match(ch, "[@-~]") then
             orig = orig .. ch;
             final = ch;
         end
@@ -658,7 +660,7 @@ do
     -- Input - key modifiers
     local mod_code = {SHIFT = 0x1, ALT = 0x2, CTRL = 0x4, META = 0x8};
     local function ctrl(ch)
-        return string_char(band(ch:byte(), 0x1f));
+        return string_char(band(string_byte(ch), 0x1f));
     end
     local function Mod(key, code, prefix)
         if type(key) == "table" then
@@ -816,8 +818,8 @@ do
         },
         [ESC] = handle_esc,
         [false] = function(ch)
-            if #ch > 0 and ch:byte() < (" "):byte() then
-                return "^" .. string_char(("@"):byte() + ch:byte());
+            if #ch > 0 and string_byte(ch) < string_byte(" ") then
+                return "^" .. string_char(string_byte("@") + string_byte(ch));
             end
             return ch;
         end,
@@ -963,7 +965,7 @@ do
     end
     local function strip_ansi(str)
         -- The order matters
-        return (str:gsub(ESC .. "%[[0-9:;<=>?]*[ -/]*[@-~]", ""):gsub(ESC .. "[@-~]", ""));
+        return (string_gsub(string_gsub(str, ESC .. "%[[0-9:;<=>?]*[ -/]*[@-~]", ""), ESC .. "[@-~]", ""));
     end
     local function str_width(str)
         -- Assume UTF-8 is used; remove `gsub` if using Big5
@@ -1072,7 +1074,7 @@ do
         else
             local msg_head = sgr_str(0, 34, 46) .. [=[ ★ ]=] .. msg;
             move(ymax - 1, 0);
-            io_write(msg_head .. (" "):rep(xmax - str_width(msg_head) - pause_tail_len));
+            io_write(msg_head .. string_rep(" ", xmax - str_width(msg_head) - pause_tail_len));
             move(ymax - 1, xmax - pause_tail_len);
             io_write(pause_tail);
             term_x = xmax - 1;
@@ -1218,9 +1220,9 @@ do
             return preprocess_data(key, data, cur, w, echo, history);
         end,
         [false] = function(key, data, cur, w, echo, history)
-            if #key ~= 1 or key:byte() < (" "):byte()
+            if #key ~= 1 or string_byte(key) < string_byte(" ")
                   or str_width(data .. key) > w
-                  or (band(echo, Echo.NUMECHO) ~= 0 and key:match("[^0-9]")) then
+                  or (band(echo, Echo.NUMECHO) ~= 0 and string_match(key, "[^0-9]")) then
                 io_write(bell_str);
                 return data, cur, w, echo, history;
             end
@@ -1242,17 +1244,17 @@ do
         local suffix = string_sub(data, cur + 1 + w_cur);
         local passecho = band(echo, Echo.PASSECHO) ~= 0;
         if passecho then
-            prefix = ("*"):rep(w_prefix);
-            ch_cur = ("*"):rep(str_width(ch_cur));
-            suffix = ("*"):rep(str_width(suffix));
+            prefix = string_rep("*", w_prefix);
+            ch_cur = string_rep("*", str_width(ch_cur));
+            suffix = string_rep("*", str_width(suffix));
         end
         io_write(clrtoeol_str .. sgr_str(0, 30, 47) .. prefix);
         if #ch_cur == 0 and #suffix == 0 then
             if w - w_data > 0 then
-                io_write(sgr_str(1, 37, 40, 100) .. " "  .. sgr_str(0, 30, 47) .. suffix .. (" "):rep(w - w_data - 1));
+                io_write(sgr_str(1, 37, 40, 100) .. " "  .. sgr_str(0, 30, 47) .. suffix .. string_rep(" ", w - w_data - 1));
             end
         else
-            io_write(sgr_str(1, 37, 40, 100) .. ch_cur .. sgr_str(0, 30, 47) .. suffix .. (" "):rep(w - w_data));
+            io_write(sgr_str(1, 37, 40, 100) .. ch_cur .. sgr_str(0, 30, 47) .. suffix .. string_rep(" ", w - w_data));
         end
         io_write(sgr_str());
         term_x = term_x + w;
@@ -1291,9 +1293,9 @@ do
     bbs = {
         addstr = function(...)
             local ymax, xmax = getmaxyx();
-            local msg, r = table_concat{...}:gsub("\n", clrtoeol_str .. "\n");
-            r = r + ({msg:gsub(("[^\n]"):rep(xmax), "")})[2];
-            local tail = msg:match("\n(.*)$");
+            local msg, r = string_gsub(table_concat{...}, "\n", clrtoeol_str .. "\n");
+            r = r + ({string_gsub(msg, string_rep("[^\n]", xmax), "")})[2];
+            local tail = string_match(msg, "\n(.*)$");
             io_write(msg);
             term_y = term_y + r;
             if tail ~= nil then
@@ -1338,11 +1340,11 @@ do
             local y, x = getyx();
             for kr = 0, r - 1, 1 do
                 move(y + kr, x);
-                io_write((" "):rep(c));
+                io_write(string_rep(" ", c));
             end
             if ttl ~= nil then
                 -- Center the title, both vertically and horizontally
-                move(y + (r - #ttl:gsub("[^\n]", "") - 1) / 2, x + (c - str_width(ttl)) / 2)
+                move(y + (r - #string_gsub(ttl, "[^\n]", "") - 1) / 2, x + (c - str_width(ttl)) / 2)
                 io_write(ttl);
             end
             move(y, x);
@@ -1457,7 +1459,7 @@ do
         -- Normalize and hash the path
         local store_hash_path = path;
         store_hash_path = string_gsub(store_hash_path, "^%.?/", "");
-        if not store_hash_path:match("^/") then
+        if not string_match(store_hash_path, "^/") then
             store_hash_path = curr_dir .. "/" .. store_hash_path;
         end
         local store_hash = fnv1_32_hash(store_hash_path);
@@ -1682,7 +1684,7 @@ For more information, please refer to https://term.ptt2.cc BBSLua
             prog, err = basic_load(coroutine_wrap(function()
                 -- Load the program line by line to handle plain text and TOC
                 for line in io_lines(prog_path) do
-                    if line:match(bbslua_pat) then
+                    if string_match(line, bbslua_pat) then
                         if is_code then
                             -- End of code
                             break;
@@ -1691,7 +1693,7 @@ For more information, please refer to https://term.ptt2.cc BBSLua
                         is_code = true;
                         coroutine_yield("\n");  -- Ignore this line
                     elseif is_code then
-                        local k, v = line:match(toctag_pat);
+                        local k, v = string_match(line, toctag_pat);
                         if is_toc then
                             if k and v then
                                 if toc_tags[k:lower()] then
