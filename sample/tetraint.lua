@@ -762,7 +762,7 @@ end
 function Tetro:child_pos(r, c, orient)
     return (r - 1) - (#self.piece[orient + 1] - 1), c - 1;
 end
-function Tetro:draw(pos, orient, posmin, poslimit)
+function Tetro:draw(pos, orient, posmin, poslimit, cell_state)
     local piece = self.piece[orient + 1];
     for kr, vr in ipairs(piece) do
         local ypos = pos[1] + (self:child_pos(kr, 0, orient));
@@ -771,14 +771,15 @@ function Tetro:draw(pos, orient, posmin, poslimit)
                 local xpos = pos[2] + 2 * (select(2, self:child_pos(0, kc, orient)));
                 if xpos >= posmin[2] and xpos < poslimit[2] then
                     if vc.state ~= Cell.State.EMPTY then
-                        local attr = vc.color:decode();
+                        local vc_draw = cell_state and Cell{cell_state, vc.color:decode().fg} or vc;
+                        local attr = vc_draw.color:decode();
                         bbs.move(ypos, xpos);
                         bbs.attrset(
                         30 + attr.fg,
                         attr.bold and 1 or 22,
                         40 + attr.bg,
                         attr.blink and 5 or 25);
-                        bbs.addstr(Cell.StateCh[vc.state]);
+                        bbs.addstr(Cell.StateCh[vc_draw.state]);
                     end
                 elseif xpos >= poslimit[2] then
                     break;
@@ -805,19 +806,29 @@ function Player:new(...)
         hold_lock = false;
         tetro = Tetro.V,
         state = 0,
+        ymax = 0,
+        g = 2048/65536,  -- dy per frame
+        g_soft = 32768/65536,  -- dy per frame during softdropping
+        g_curr = 0,  -- Current dy per frame
+        lock_init = 60,  -- Lock timer, in frames
+        lock_max = 0,  -- Current max value for lock timer
         y = 0,
         x = 0,
         rot = 0,
+        lock_curr = 0,  -- Lock timer
         dy = 0,
+        dy_frac = 0,
         dx = 0,
         drot = 0,
-        dlock = 0,
     };
 end
 function Player:spawn()
     self.y = -(self.board.disph - 3);
     self.x = 3;
     self.rot = 0;
+    self.g_curr = self.g;
+    self.lock_max = self.lock_init;
+    self.lock_curr = self.lock_max;
     if self:test_collision() then
         -- Try to spawn 1 row higher
         self.y = self.y - 1;
@@ -830,6 +841,7 @@ function Player:spawn()
             end
         end
     end
+    self:update_piece(false);
 end
 function Player:next()
     self.tetro = Tetro[math.random(#Tetro)];
@@ -844,11 +856,25 @@ function Player:hold()
     end
 end
 function Player:draw()
+    if self.y ~= self.ymax then
+        -- Draw the ghost piece
+        local ghost = obj_copy(self.tetro);
+        self.tetro:draw(
+            {self.board.y + self.board.disph - 1 + self.ymax, self.board.x + 2 * self.x},
+            self.rot,
+            {self.board.y, self.board.x - 2},
+            {self.board.y + self.board.disph + 1, self.board.x + 2 * (self.board.w + 1)},
+            Cell.State.GHOST);
+    end
+
+    -- Then draw the player piece
     self.tetro:draw(
         {self.board.y + self.board.disph - 1 + self.y, self.board.x + 2 * self.x},
         self.rot,
         {self.board.y, self.board.x - 2},
         {self.board.y + self.board.disph + 1, self.board.x + 2 * (self.board.w + 1)});
+
+    -- Draw the hold piece
     local hold_pos = {self.board.y, self.board.x + 2 * (self.board.w + 1 + 1)};
     local hold_size = {4, 2 * 4};
     local draw = Draw_border(hold_pos, hold_size, double_border_pat);
@@ -866,7 +892,8 @@ function Player:piece_pos(r, c)
     local ypos, xpos = self.tetro:child_pos(r, c, self.rot);
     return self.y + ypos, self.x + xpos;
 end
-function Player:test_collision()
+function Player:test_collision(hide_test)
+    hide_test = hide_test ~= nil and hide_test or false;
     local is_collided = false;
     local is_in_field = false;
     local piece = self.tetro.piece[self.rot + 1];
@@ -877,14 +904,16 @@ function Player:test_collision()
                 local vr_brd = self.board.data[pos[1]];
                 local vc_brd = vr_brd and vr_brd[pos[2]] or nil;
                 if vc_brd == nil or vc_brd.state == Cell.State.FILLED then
-                    vr[kc] = Cell{Color(7, true, 4, true)};
-                    self.board:draw();
-                    self:draw();
-                    bbs.attrset(0);
-                    bbs.move(13, 40);
-                    print("collided at ", tblstr(pos));
-                    bbs.kbhit(0.05);
-                    vr[kc] = vc;
+                    if not hide_test then
+                        vr[kc] = Cell{Color(7, true, 4, true)};
+                        self.board:draw();
+                        self:draw();
+                        bbs.attrset(0);
+                        bbs.move(13, 40);
+                        print("collided at ", tblstr(pos));
+                        bbs.kbhit(0.05);
+                        vr[kc] = vc;
+                    end
                     self.board:draw();
                     is_collided = true;
                 elseif pos[1] > -self.board.disph then
@@ -894,6 +923,19 @@ function Player:test_collision()
         end
     end
     return is_collided, is_in_field;
+end
+function Player:update_piece(decrease_lock)
+    if self.y >= self.ymax and decrease_lock then
+        self.lock_max = self.lock_max - 0.5;
+        self.lock_curr = math.max(self.lock_curr, self.lock_max);
+    end
+
+    local y_orig = self.y;
+    repeat
+        self.y = self.y + 1;
+    until self:test_collision(true);
+    self.ymax = self.y - 1;
+    self.y = y_orig;
 end
 function Player:rotate(orient)
     local rot_orig = self.rot;
@@ -910,6 +952,7 @@ function Player:rotate(orient)
         print("trying ", k, ": ", tblstr(v));
         self.y, self.x = y_orig + v[2], x_orig + v[1];
         if not self:test_collision() then
+            self:update_piece(true);
             return;
         end
     end
@@ -920,36 +963,56 @@ function Player:rot90() self.drot = 1; end
 function Player:rotc90() self.drot = 3; end
 function Player:lshift() self.dx = -1; end
 function Player:rshift() self.dx = 1; end
-function Player:softdrop() self.dy = 1; end
+function Player:softdrop()
+    self.g_curr = self.g_soft;
+    self.lock_curr = 0;
+end
 function Player:softlift() self.dy = -1; end
-function Player:harddrop() self.dlock = 1; end
+function Player:harddrop()
+    self.dy = self.ymax - self.y;
+    self.lock_max = 0;
+    self.lock_curr = 0;
+end
 function Player:update()
     if self.state == 0 then
+        -- Rotation
         if self.drot ~= 0 then
             self:rotate(self.drot);
         end
+        -- Shift
         if self.dx ~= 0 then
             local x_orig = self.x;
             self.x = self.x + self.dx;
             if self:test_collision() then
                 self.x = x_orig;
+            else
+                self:update_piece(true);
             end
         end
-        if self.dy ~= 0 then
-            local y_orig = self.y;
-            self.y = self.y + self.dy;
-            if self:test_collision() then
-                self.y = y_orig;
+        -- Gravity
+        if self.y < self.ymax then
+            local dy_g;  -- dy affected by gravity
+            dy_g, self.dy_frac = math.modf(self.dy_frac + self.g_curr);
+            self.dy = self.dy + dy_g;
+            if self.dy ~= 0 then
+                local y_orig = self.y;
+                self.y = math.min(self.y + self.dy, self.ymax);
+                if self:test_collision() then
+                    self.y = y_orig;
+                end
             end
-        end
-        if self.dlock ~= 0 then
+            self.lock_curr = self.lock_max;
+        elseif self.lock_curr > 0 then
+            self.lock_curr = self.lock_curr - 1;
+        else
+            -- Lock
             self:lock();
         end
     end
+    self.g_curr = self.g;
     self.dy = 0;
     self.dx = 0;
     self.drot = 0;
-    self.dlock = 0;
 end
 function Player:lock()
     local is_collided, is_in_field = self:test_collision();
