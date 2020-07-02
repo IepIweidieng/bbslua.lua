@@ -842,6 +842,7 @@ function Player:spawn()
         end
     end
     self:update_piece(false);
+    self:draw_next();
 end
 function Player:next()
     self.tetro = Tetro[math.random(#Tetro)];
@@ -873,7 +874,8 @@ function Player:draw()
         self.rot,
         {self.board.y, self.board.x - 2},
         {self.board.y + self.board.disph + 1, self.board.x + 2 * (self.board.w + 1)});
-
+end
+function Player:draw_next()
     -- Draw the hold piece
     local hold_pos = {self.board.y, self.board.x + 2 * (self.board.w + 1 + 1)};
     local hold_size = {4, 2 * 4};
@@ -905,16 +907,10 @@ function Player:test_collision(hide_test)
                 local vc_brd = vr_brd and vr_brd[pos[2]] or nil;
                 if vc_brd == nil or vc_brd.state == Cell.State.FILLED then
                     if not hide_test then
-                        vr[kc] = Cell{Color(7, true, 4, true)};
-                        self.board:draw();
-                        self:draw();
                         bbs.attrset(0);
                         bbs.move(13, 40);
                         print("collided at ", tblstr(pos));
-                        bbs.kbhit(0.05);
-                        vr[kc] = vc;
                     end
-                    self.board:draw();
                     is_collided = true;
                 elseif pos[1] > -self.board.disph then
                     is_in_field = true;
@@ -1117,6 +1113,7 @@ local function main(...)
     bbs.clear();
 
     print_help(2, 42);
+    player:draw_next();
 
     -- Main loop
     local y = 0;
@@ -1131,6 +1128,7 @@ local function main(...)
             bbs.color(1, 37, 40);
             bbs.addstr("PAUSED");
         end
+        bbs.move(0, 0);
 
         local input = {bbs.kball(0.016)};
         bbs.move(16, 40);
@@ -1145,6 +1143,7 @@ local function main(...)
     bbs.move(board.y + board.disph / 2, board.x + board.w - 5);
     bbs.color(1, 37, 40);
     bbs.addstr("GAME OVER!");
+    bbs.move(0, 0);
     bbs.kbhit(1);
 end
 
