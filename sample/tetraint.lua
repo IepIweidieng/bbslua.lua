@@ -704,12 +704,13 @@ y
 ]]
 local_class "Board"{};
 function Board:new(...)
-    local args = getargs({{"copy", "Board"}, {"y", "number"}, {"x", "number"}, {"h", "number"}, {"w", "number"}, "data"}, ...);
+    local args = getargs({{"copy", "Board"}, {"y", "number"}, {"x", "number"}, {"h", "number"}, {"w", "number"}, {"disph", "number"}, "data"}, ...);
     return obj_copy(args.copy) or {
         y = args.y or 0,
         x = args.x or 0,
         h = args.h,
         w = args.w,
+        disph = args.disph,
         data = args.data or {};
     };
 end
@@ -725,15 +726,15 @@ function Board:init()
     end
 end
 function Board:draw()
-    local draw = Draw_border({self.y, self.x}, {self.h, 2 * self.w}, double_border_pat);
+    local draw = Draw_border({self.y, self.x}, {self.disph, 2 * self.w}, double_border_pat);
     bbs.attrset();
     draw:left():right():bottom();
-    for kr = -(self.h - 1), 0, 1 do
+    for kr = -(self.disph - 1), 0, 1 do
         local row = self.data[kr];
         for kc = 0, self.w - 1, 1 do
             local vc = row[kc];
             local attr = vc.color:decode();
-            bbs.move(self.y + self.h - 1 + kr, self.x + 2 * kc);
+            bbs.move(self.y + self.disph - 1 + kr, self.x + 2 * kc);
             bbs.attrset(
                 30 + attr.fg,
                 attr.bold and 1 or 22,
@@ -790,6 +791,11 @@ function Tetro:draw(pos, orient, posmin, poslimit)
 end
 
 local_class "Player"{};
+Player.State = {
+    -- Bit flags
+    LOST = 0x1,
+    PAUSE = 0x2,
+};
 function Player:new(...)
     local args = getargs({{"copy", "Player"}, {"board", "Board"}, "keybind"}, ...);
     return obj_copy(args.copy) or {
@@ -798,16 +804,32 @@ function Player:new(...)
         hold = Tetro.V,
         hold_lock = false;
         tetro = Tetro.V,
+        state = 0,
         y = 0,
         x = 0,
         rot = 0,
+        dy = 0,
         dx = 0,
+        drot = 0,
+        dlock = 0,
     };
 end
 function Player:spawn()
-    self.y = -11;
+    self.y = -(self.board.disph - 3);
     self.x = 3;
     self.rot = 0;
+    if self:test_collision() then
+        -- Try to spawn 1 row higher
+        self.y = self.y - 1;
+        if self:test_collision() then
+            -- Try to spawn 1 row higher again
+            self.y = self.y - 1;
+            if self:test_collision() then
+                -- Block out
+                self.state = bit.bor(self.state, Player.State.LOST);
+            end
+        end
+    end
 end
 function Player:next()
     self.tetro = Tetro[math.random(#Tetro)];
@@ -823,10 +845,10 @@ function Player:hold()
 end
 function Player:draw()
     self.tetro:draw(
-        {self.board.y + self.board.h - 1 + self.y, self.board.x + 2 * self.x},
+        {self.board.y + self.board.disph - 1 + self.y, self.board.x + 2 * self.x},
         self.rot,
         {self.board.y, self.board.x - 2},
-        {self.board.y + self.board.h + 1, self.board.x + 2 * (self.board.w + 1)});
+        {self.board.y + self.board.disph + 1, self.board.x + 2 * (self.board.w + 1)});
     local hold_pos = {self.board.y, self.board.x + 2 * (self.board.w + 1 + 1)};
     local hold_size = {4, 2 * 4};
     local draw = Draw_border(hold_pos, hold_size, double_border_pat);
@@ -844,12 +866,14 @@ function Player:piece_pos(r, c)
     local ypos, xpos = self.tetro:child_pos(r, c, self.rot);
     return self.y + ypos, self.x + xpos;
 end
-function Player:is_collided()
+function Player:test_collision()
+    local is_collided = false;
+    local is_in_field = false;
     local piece = self.tetro.piece[self.rot + 1];
     for kr, vr in ipairs(piece) do
         for kc, vc in ipairs(vr) do
+            local pos = {self:piece_pos(kr, kc)};
             if vc.state == Cell.State.FLOAT then
-                local pos = {self:piece_pos(kr, kc)};
                 local vr_brd = self.board.data[pos[1]];
                 local vc_brd = vr_brd and vr_brd[pos[2]] or nil;
                 if vc_brd == nil or vc_brd.state == Cell.State.FILLED then
@@ -859,15 +883,17 @@ function Player:is_collided()
                     bbs.attrset(0);
                     bbs.move(13, 40);
                     print("collided at ", tblstr(pos));
-                    bbs.kbhit(0.1);
+                    bbs.kbhit(0.05);
                     vr[kc] = vc;
                     self.board:draw();
-                    return true;
+                    is_collided = true;
+                elseif pos[1] > -self.board.disph then
+                    is_in_field = true;
                 end
             end
         end
     end
-    return false;
+    return is_collided, is_in_field;
 end
 function Player:rotate(orient)
     local rot_orig = self.rot;
@@ -883,39 +909,54 @@ function Player:rotate(orient)
         bbs.move(15, 40);
         print("trying ", k, ": ", tblstr(v));
         self.y, self.x = y_orig + v[2], x_orig + v[1];
-        if not self:is_collided() then
+        if not self:test_collision() then
             return;
         end
     end
     self.y, self.x = y_orig, x_orig;
     self.rot = rot_orig;
 end
-function Player:rot90() self:rotate(1); end
-function Player:rotc90() self:rotate(3); end
-function Player:shift(dx)
-    local x_orig = self.x;
-    self.x = self.x + dx;
-    if self:is_collided() then
-        self.x = x_orig;
+function Player:rot90() self.drot = 1; end
+function Player:rotc90() self.drot = 3; end
+function Player:lshift() self.dx = -1; end
+function Player:rshift() self.dx = 1; end
+function Player:softdrop() self.dy = 1; end
+function Player:softlift() self.dy = -1; end
+function Player:harddrop() self.dlock = 1; end
+function Player:update()
+    if self.state == 0 then
+        if self.drot ~= 0 then
+            self:rotate(self.drot);
+        end
+        if self.dx ~= 0 then
+            local x_orig = self.x;
+            self.x = self.x + self.dx;
+            if self:test_collision() then
+                self.x = x_orig;
+            end
+        end
+        if self.dy ~= 0 then
+            local y_orig = self.y;
+            self.y = self.y + self.dy;
+            if self:test_collision() then
+                self.y = y_orig;
+            end
+        end
+        if self.dlock ~= 0 then
+            self:lock();
+        end
     end
+    self.dy = 0;
+    self.dx = 0;
+    self.drot = 0;
+    self.dlock = 0;
 end
-function Player:lshift() self:shift(-1); end
-function Player:rshift() self:shift(1); end
-function Player:softdrop()
-    local y_orig = self.y;
-    self.y = self.y + 1;
-    if self:is_collided() then
-        self.y = y_orig;
+function Player:lock()
+    local is_collided, is_in_field = self:test_collision();
+    if not is_in_field then
+        -- Lock out
+        self.state = bit.bor(self.state, Player.State.LOST);
     end
-end
-function Player:softlift()
-    local y_orig = self.y;
-    self.y = self.y - 1;
-    if self:is_collided() then
-        self.y = y_orig;
-    end
-end
-function Player:harddrop()
     local piece = self.tetro.piece[self.rot + 1];
     for kr, vr in ipairs(piece) do
         for kc, vc in ipairs(vr) do
@@ -944,11 +985,16 @@ function Player:harddrop()
             end
         end
     end
-    self:next();
+    if is_in_field then
+        self:next();
+    end
+end
+function Player:pause()
+    self.state = bit.bxor(self.state, Player.State.PAUSE);
 end
 
 local keybind = {
-    UP = --[[Player.rot90]] Player.softlift,
+    UP = Player.rot90,
     ["1"] = Player.rot90,
     ["5"] = Player.rot90,
     ["9"] = Player.rot90,
@@ -973,12 +1019,32 @@ local keybind = {
     ["^Z"] = Player.pause,
 };
 
+local function print_help(y, x)
+    bbs.color(1, 37, 40);
+    bbs.move(y, x);
+    bbs.print("x, UP, 1, 5, 9: Rotate clockwise");
+    bbs.move(y + 1, x);
+    bbs.print("z, 3, 7: Rotate counter-clockwise");
+    bbs.move(y + 2, x);
+    bbs.print("c, 0: Hold");
+    bbs.move(y + 3, x);
+    bbs.print("LEFT, 4: Shift left");
+    bbs.move(y + 4, x);
+    bbs.print("RIGHT, 6: Shift right");
+    bbs.move(y + 5, x);
+    bbs.print("DOWN, 2: Softdrop");
+    bbs.move(y + 6, x);
+    bbs.print("SPACE: Harddrop and lock");
+    bbs.move(y + 7, x);
+    bbs.print("F1: Pause");
+end
+
 local function get_skip_tbl(player)
-    return Weak_set(arr_to_set{player.board, unpack(Tetro, 0)});
+    return Weak_set(arr_to_set{player.board, keybind, unpack(Tetro, 0)});
 end
 
 local function main(...)
-    local board = Board(1, 6, 15, 10);
+    local board = Board(1, 6, 40, 10, 15);
     local player = Player(board, keybind);
     board:init();
     player:next();
@@ -986,29 +1052,37 @@ local function main(...)
     bbs.print(tblstr(player, get_skip_tbl(player)));
     bbs.pause();
     bbs.clear();
+
+    print_help(2, 42);
+
     -- Main loop
     local y = 0;
-    while true do
+    while bit.band(player.state, Player.State.LOST) == 0 do
         bbs.move(17);
         bbs.addstr(tblstr(player, get_skip_tbl(player)));
         board:draw();
         player:draw();
 
+        if bit.band(player.state, Player.State.PAUSE) ~= 0 then
+            bbs.move(board.y + board.disph / 2, board.x + board.w - 3);
+            bbs.color(1, 37, 40);
+            bbs.addstr("PAUSED");
+        end
+
         local input = {bbs.kball(0.016)};
         bbs.move(16, 40);
         bbs.print(tblstr(input));
         for k, v in ipairs(input) do
-            if player.keybind[v] == Player.lshift then
-                player.dx = -1;
-            elseif player.keybind[v] == Player.rshift then
-                player.dx = 1;
-            end
-        end
-        for k, v in ipairs(input) do
             (player.keybind[v] or noop)(player);
         end
-        player.dx = 0;
+        player:update();
     end
+    board:draw();
+    player:draw();
+    bbs.move(board.y + board.disph / 2, board.x + board.w - 5);
+    bbs.color(1, 37, 40);
+    bbs.addstr("GAME OVER!");
+    bbs.kbhit(1);
 end
 
 main(...);
