@@ -118,9 +118,9 @@ Table legend:
 
 | Function       | Parameter ↦ Return Value                        | Description                                                                                                           | Note |
 | -------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---- |
-| `bit.tobit`    | `(x: number)` ↦ `(res: number)`                 | - Get a range-normalized copy a number <br> - Not necessary for other bitwise operations                              |      |
-| `bit.cast`     | `(x: number)` ↦ `(res: number)`                 | An alias to `bit.tobit` for compatibility with bitlib                                                                 |      |
-| `bit.tohex`    | `(x: number, n: number=8)` ↦ `(res: string)`    | - Get an `n`-digit hexadecimal number string of `x` <br> - Negative `n` produces an uppercase hexadecimal number string |      |
+| `bit.tobit`    | `(x: number)` ↦ `(res: number)`                 | - Get a range-normalized copy a number <br> - Not necessary for other bitwise operations                              | Not in bitlib |
+| `bit.cast`     | `(x: number)` ↦ `(res: number)`                 | An alias to `bit.tobit` for compatibility with bitlib                                                                 | Not in BitOp |
+| `bit.tohex`    | `(x: number, n: number=8)` ↦ `(res: string)`    | - Get an `n`-digit hexadecimal number string of `x` <br> - Negative `n` produces an uppercase hexadecimal number string | Not in bitlib |
 | `bit.bnot`     | `(x: number)` ↦ `(res: number)`                 | Bitwise `not`                                                                                                         |      |
 | `bit.bor`      | `(x1: number, x2: number...)` ↦ `(res: number)` | Bitwise `or` of all arguments                                                                                         |      |
 | `bit.band`     | `(x1: number, x2: number...)` ↦ `(res: number)` | Bitwise `and` of all arguments                                                                                        |      |
@@ -128,6 +128,6 @@ Table legend:
 | `bit.lshift`   | `(x: number, n: number)` ↦ `(res: number)`      | Bitwise left-shift. Use only the lowest 5 bits of `n`                                                                 |      |
 | `bit.rshift`   | `(x: number, n: number)` ↦ `(res: number)`      | Bitwise logical right-shift. Use only the lowest 5 bits of `n`                                                        |      |
 | `bit.arshift`  | `(x: number, n: number)` ↦ `(res: number)`      | Bitwise arithmetic right-shift. Use only the lowest 5 bits of `n`                                                     |      |
-| `bit.rol`      | `(x: number, n: number)` ↦ `(res: number)`      | Bitwise right rotation. Use only the lowest 5 bits of `n`                                                             |      |
-| `bit.ror`      | `(x: number, n: number)` ↦ `(res: number)`      | Bitwise left rotation. Use only the lowest 5 bits of `n`                                                              |      |
-| `bit.bswap`    | `(x: number)` ↦ `(res: number)`                 | Get a copy of `x` with byte order reversed                                                                            |      |
+| `bit.rol`      | `(x: number, n: number)` ↦ `(res: number)`      | Bitwise right rotation. Use only the lowest 5 bits of `n`                                                             | Not in bitlib |
+| `bit.ror`      | `(x: number, n: number)` ↦ `(res: number)`      | Bitwise left rotation. Use only the lowest 5 bits of `n`                                                              | Not in bitlib |
+| `bit.bswap`    | `(x: number)` ↦ `(res: number)`                 | Get a copy of `x` with byte order reversed                                                                            | Not in bitlib |
