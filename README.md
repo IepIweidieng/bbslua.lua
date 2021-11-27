@@ -119,7 +119,7 @@ Table legend:
 | Function       | Parameter ↦ Return Value                        | Description                                                                                                           | Note |
 | -------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---- |
 | `bit.tobit`    | `(x: number)` ↦ `(res: number)`                 | - Get a range-normalized copy a number <br> - Not necessary for other bitwise operations                              |      |
-| **`bit.cast`** | `(x: number)` ↦ `(res: number)`                 | **An alias to `bit.tobit` for compatibility with bitlib**                                                             |      |
+| `bit.cast`     | `(x: number)` ↦ `(res: number)`                 | An alias to `bit.tobit` for compatibility with bitlib                                                                 |      |
 | `bit.tohex`    | `(x: number, n: number=8)` ↦ `(res: string)`    | - Get an `n`-digit hexadecimal number string of `x` <br> - Negative `n` produces an uppercase hexadecimal number string |      |
 | `bit.bnot`     | `(x: number)` ↦ `(res: number)`                 | Bitwise `not`                                                                                                         |      |
 | `bit.bor`      | `(x1: number, x2: number...)` ↦ `(res: number)` | Bitwise `or` of all arguments                                                                                         |      |
