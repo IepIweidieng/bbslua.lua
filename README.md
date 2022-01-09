@@ -128,6 +128,6 @@ Table legend:
 | `bit.lshift`   | `(x: number, n: number)` ↦ `(res: number)`      | Bitwise left-shift. Use only the lowest 5 bits of `n`                                                                 |      |
 | `bit.rshift`   | `(x: number, n: number)` ↦ `(res: number)`      | Bitwise logical right-shift. Use only the lowest 5 bits of `n`                                                        |      |
 | `bit.arshift`  | `(x: number, n: number)` ↦ `(res: number)`      | Bitwise arithmetic right-shift. Use only the lowest 5 bits of `n`                                                     |      |
-| `bit.rol`      | `(x: number, n: number)` ↦ `(res: number)`      | Bitwise right rotation. Use only the lowest 5 bits of `n`                                                             | Not in bitlib |
-| `bit.ror`      | `(x: number, n: number)` ↦ `(res: number)`      | Bitwise left rotation. Use only the lowest 5 bits of `n`                                                              | Not in bitlib |
+| `bit.rol`      | `(x: number, n: number)` ↦ `(res: number)`      | Bitwise left rotation. Use only the lowest 5 bits of `n`                                                             | Not in bitlib |
+| `bit.ror`      | `(x: number, n: number)` ↦ `(res: number)`      | Bitwise right rotation. Use only the lowest 5 bits of `n`                                                              | Not in bitlib |
 | `bit.bswap`    | `(x: number)` ↦ `(res: number)`                 | Get a copy of `x` with byte order reversed                                                                            | Not in bitlib |
