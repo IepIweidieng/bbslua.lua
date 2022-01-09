@@ -1478,8 +1478,20 @@ do
         local store_max = 32;
         local store_counter = 0;
 
+        local store;
+
+        local function limit(cate)
+            if cate == store.USER then
+                return 16 * 1024;
+            end
+            if cate == store.GLOBAL then
+                return 16 * 1024;
+            end
+            return 0;
+        end
+
         -- The BBS-Lua store API table
-        return {
+        store = {
             load = function(cate)
                 if store_counter >= store_max then
                     return nil, "IO limit exceeded";
@@ -1495,6 +1507,9 @@ do
                 store_counter = store_counter + 1;
                 local res = file:read("*a");
                 file:close();
+                if #res > limit(cate) then
+                    return res, "data size limit exceeded (kept): " .. #res;
+                end
                 return res;
             end,
             save = function(cate, str)
@@ -1510,23 +1525,22 @@ do
                     return false, "failed to open file: " .. path;
                 end
                 store_counter = store_counter + 1;
+                local res = {true};
+                local len_limit = limit(cate);
+                if #str > len_limit then
+                    str = string_sub(str, 1, len_limit);
+                    res[2] = string_format("data size limit exceeded (truncated to %d): %d", len_limit, #str);
+                end
                 file:write(str);
                 file:close();
-                return true;
+                return unpack(res);
             end,
-            limit = function(cate)
-                if cate == store.USER then
-                    return 16 * 1024;
-                end
-                if cate == store.GLOBAL then
-                    return 16 * 1024;
-                end
-                return 0;
-            end,
+            limit = limit,
             iolimit = function() return store_max; end,
             USER = store_cate.USER,
             GLOBAL = store_cate.GLOBAL,
         };
+        return store;
     end
 end
 
