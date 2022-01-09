@@ -118,7 +118,7 @@ Table legend:
 
 | Function       | Parameter ↦ Return Value                        | Description                                                                                                           | Note |
 | -------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---- |
-| `bit.tobit`    | `(x: number)` ↦ `(res: number)`                 | - Get a range-normalized copy a number <br> - Not necessary for other bitwise operations                              | Not in bitlib |
+| `bit.tobit`    | `(x: number)` ↦ `(res: number)`                 | - Get a range-normalized copy of a number <br> - Not necessary for other bitwise operations                              | Not in bitlib |
 | `bit.cast`     | `(x: number)` ↦ `(res: number)`                 | An alias to `bit.tobit` for compatibility with bitlib                                                                 | Not in BitOp |
 | `bit.tohex`    | `(x: number, n: number=8)` ↦ `(res: string)`    | - Get an `n`-digit hexadecimal number string of `x` <br> - Negative `n` produces an uppercase hexadecimal number string | Not in bitlib |
 | `bit.bnot`     | `(x: number)` ↦ `(res: number)`                 | Bitwise `not`                                                                                                         |      |
