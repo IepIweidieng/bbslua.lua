@@ -106,7 +106,7 @@ Table legend:
 | --------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
 | _`store.load`_  | `(cate: string)` ↦ _`(res: string, err: string)`_               | - Load the file for given category as a string. Return `nil` if fails <br> _- When operation fails, `err` is a string explaining the reason_                  |      |
 | _`store.save`_  | `(cate: string, str: string)` ↦ _`(res: boolean, err: string)`_ | - Save a string as the file for given category. Return whether the operation success   <br> _- When operation fails, `err` is a string explaining the reason_ |      |
-| `store.limit`   | `(cate: string)`                                                | Get the maximum permitted file size for given category, in bytes                                                                                              |      |
+| `store.limit`   | `(cate: string) ↦ (bytes: number)`                              | Get the maximum permitted file size for given category, in bytes                                                                                              |      |
 | `store.iolimit` | `()` ↦ `(max: number)`                                          | Get the maximum permitted number of times that `store.load` and `store.save` may open files                                                                   |      |
 
 | Constant       | Value              | Description                                       | Note |
